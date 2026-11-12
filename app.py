@@ -3,10 +3,10 @@ import streamlit as st
 import time
 
 st.set_page_config(
-    page_title="AI Human-like Roleplay", page_icon="💬", layout="centered"
+    page_title="AI Novel & Roleplay", page_icon="📖", layout="centered"
 )
 
-st.title("💬 AI Roleplay: แชทกับตัวละครให้เหมือนคนจริงๆ")
+st.title("📖 AI Roleplay & Novel Style: สไตล์นิยายบรรยาย")
 
 # ดึง API Key
 try:
@@ -38,11 +38,21 @@ if "current_char" not in st.session_state:
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
+  st.header("⚙️ ตั้งค่าสไตล์การคุย")
+  # เลือกโหมดการตอบ
+  chat_mode = st.radio(
+      "เลือกรูปแบบการตอบ:",
+      ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว & ชวนคุยต่อเนื่อง"],
+  )
+
+  st.divider()
   st.header("✨ สร้างตัวละครใหม่")
-  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, เพื่อนสนิท...")
+  new_name = st.text_input(
+      "ชื่อตัวละคร:", placeholder="เช่น พระเอกนิยาย, แฟนหนุ่ม..."
+  )
   new_prompt = st.text_area(
       "กำหนดคาแรคเตอร์:",
-      placeholder="คุณคือเพื่อนสนิท ขี้เล่น กวนๆ...",
+      placeholder="คุณคือมาเฟียหนุ่มผู้เย็นชาแต่คลั่งรัก...",
       height=100,
   )
 
@@ -85,21 +95,31 @@ with st.sidebar:
 # ดึงข้อมูลตัวละครปัจจุบัน
 active_char_data = st.session_state.characters[st.session_state.current_char]
 base_prompt = active_char_data["prompt"]
+
+# 📌 ปรับแต่งคำสั่งตามโหมดที่เลือก
+if "นิยาย" in chat_mode:
+  roleplay_instruction = (
+      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดนิยายบรรยาย]:\n"
+      "1. เขียนตอบให้มีความยาวมากขึ้นในรูปแบบ 'นิยายแชท/บทบรรยาย' (Novel"
+      " Style) มีการบรรยายท่าทาง สีหน้า แววตา หรือบรรยากาศรอบตัวประกอบด้วย"
+      " (ใช้เครื่องหมายดอกจัน * หรือวงเล็บ เพื่อสื่อถึงการกระทำ เช่น *เขยิบเข้าไปใกล้*)"
+      "\n2. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n3."
+      " เมื่อบรรยายจบเรื่องราวในแต่ละตอน ให้ 'ตั้งคำถามหรือเปิดฉากสนทนา' เพื่อโยนบทกลับมาให้ผู้ใช้เป็นคนตัดสินใจเลือกตอบหรือกระทำต่อ"
+      " เพื่อดำเนินเรื่องราวร่วมกันต่อไป"
+  )
+  temperature_val = 1.1
+else:
+  roleplay_instruction = (
+      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดแชทปกติ]:\n"
+      "1. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n"
+      "2. พูดจาภาษาคนธรรมดา ใช้น้ำเสียงธรรมชาติเหมือนแชทหากันจริงๆ"
+      " พิมพ์ตอบสั้นกระชับเป็นธรรมชาติ\n"
+      "3. ห้ามมีคำพูดลงท้ายแบบบอท เช่น 'มีอะไรให้ช่วยอีกไหมคะ'"
+  )
+  temperature_val = 0.9
+
 current_messages = active_char_data["messages"]
-
-# 📌 คำสั่งเสริมบังคับให้ AI ตอบเหมือนคนจริงๆ และเป็นธรรมชาติที่สุด
-human_like_instruction = (
-    f"{base_prompt}\n\n[กฎเหล็กในการตอบ]:\n"
-    "1. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามหลุดคาแรคเตอร์และห้ามบอกว่าตัวเองเป็น AI"
-    " เด็ดขาด\n"
-    "2. พูดจาภาษาคนธรรมดา ใช้น้ำเสียงธรรมชาติเหมือนแชทหากันจริงๆ"
-    " มีการเว้นวรรคพิมพ์สั้นยาวสลับกันไปตามอารมณ์\n"
-    "3. ห้ามตอบแบบทางการ ห้ามใช้ภาษาวิชาการ"
-    " ห้ามมีคำพูดลงท้ายแบบหุ่นยนต์หรือบอท เช่น 'มีอะไรให้ช่วยอีกไหมคะ'\n"
-    "4. แสดงความรู้สึก สีหน้า ท่าทาง หรือใส่อารมณ์ร่วมในบทสนทนาให้สมจริง"
-)
-
-st.subheader(f"💬 กำลังคุยกับ: {st.session_state.current_char}")
+st.subheader(f"📖 กำลังสวมบทบาทกับ: {st.session_state.current_char}")
 
 # แสดงแชท
 for message in current_messages:
@@ -108,7 +128,7 @@ for message in current_messages:
 
 # ช่องพิมพ์ข้อความ
 if user_input := st.chat_input(
-    f"พิมพ์คุยกับ {st.session_state.current_char}..."
+    f"พิมพ์โต้ตอบกับ {st.session_state.current_char}..."
 ):
   current_messages.append({"role": "user", "content": user_input})
   with st.chat_message("user"):
@@ -116,7 +136,7 @@ if user_input := st.chat_input(
 
   with st.chat_message("assistant"):
     message_placeholder = st.empty()
-    message_placeholder.markdown("กำลังพิมพ์...")
+    message_placeholder.markdown("กำลังร้อยเรียงเรื่องราว...")
 
     bot_response = None
     max_retries = 3
@@ -134,8 +154,8 @@ if user_input := st.chat_input(
             model=model_name,
             history=formatted_history if formatted_history else None,
             config={
-                "system_instruction": human_like_instruction,
-                "temperature": 1.0,  # เพิ่มความสร้างสรรค์และเป็นธรรมชาติให้คำตอบไม่จำเจ
+                "system_instruction": roleplay_instruction,
+                "temperature": temperature_val,
             },
         )
 
