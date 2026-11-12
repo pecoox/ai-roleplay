@@ -3,10 +3,10 @@ import streamlit as st
 import time
 
 st.set_page_config(
-    page_title="AI Roleplay - Mark Tuan", page_icon="🎤", layout="centered"
+    page_title="AI Human-like Roleplay", page_icon="💬", layout="centered"
 )
 
-st.title("🎤 AI Roleplay: คุยกับมาร์ค ต้วน")
+st.title("💬 AI Roleplay: แชทกับตัวละครให้เหมือนคนจริงๆ")
 
 # ดึง API Key
 try:
@@ -21,66 +21,95 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 model_name = "gemini-3.5-flash-lite"
 
-# จัดการระบบห้องแชทหลายห้องใน session_state
-if "chats" not in st.session_state:
-  st.session_state.chats = {"แชทหลักของมาร์ค": []}
-if "current_chat" not in st.session_state:
-  st.session_state.current_chat = "แชทหลักของมาร์ค"
+# ระบบจัดการตัวละคร
+if "characters" not in st.session_state:
+  st.session_state.characters = {
+      "มาร์ค ต้วน": {
+          "prompt": (
+              "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่มตัวจริง"
+              " นิสัยอบอุ่น เป็นกันเอง และขี้เล่น"
+          ),
+          "messages": [],
+      }
+  }
 
-# แผงควบคุมเมนูด้านข้าง (Sidebar) สำหรับจัดการแชทและตั้งค่า
+if "current_char" not in st.session_state:
+  st.session_state.current_char = "มาร์ค ต้วน"
+
+# แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
-  st.header("💬 จัดการห้องแชท")
-
-  # ปุ่มสร้างแชทใหม่
-  new_chat_name = st.text_input("ชื่อห้องแชทใหม่:", placeholder="เช่น คุยเรื่องเพลง...")
-  if st.button("➕ สร้างแชทใหม่"):
-    if new_chat_name and new_chat_name not in st.session_state.chats:
-      st.session_state.chats[new_chat_name] = []
-      st.session_state.current_chat = new_chat_name
-      st.rerun()
-
-  st.divider()
-
-  # เลือกห้องแชท
-  chat_list = list(st.session_state.chats.keys())
-  selected_chat = st.selectbox(
-      "เลือกห้องแชท:",
-      chat_list,
-      index=chat_list.index(st.session_state.current_chat),
-  )
-  if selected_chat != st.session_state.current_chat:
-    st.session_state.current_chat = selected_chat
-    st.rerun()
-
-  # ปุ่มลบแชทปัจจุบัน (ห้ามลบถ้าเหลือห้องเดียว)
-  if len(st.session_state.chats) > 1:
-    if st.button("🗑️ ลบห้องแชทนี้"):
-      del st.session_state.chats[st.session_state.current_chat]
-      st.session_state.current_chat = list(st.session_state.chats.keys())[0]
-      st.rerun()
-  else:
-    st.caption("ℹ️ ต้องมีห้องแชทอย่างน้อย 1 ห้อง")
-
-  st.divider()
-  st.header("⚙️ ตั้งค่าระบบ")
-  character_prompt = st.text_area(
-      "คาแรคเตอร์:",
-      (
-          "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่ม สุภาพ อบอุ่น"
-          " และเป็นกันเองกับแฟนคลับ"
-      ),
+  st.header("✨ สร้างตัวละครใหม่")
+  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, เพื่อนสนิท...")
+  new_prompt = st.text_area(
+      "กำหนดคาแรคเตอร์:",
+      placeholder="คุณคือเพื่อนสนิท ขี้เล่น กวนๆ...",
       height=100,
   )
 
-# ดึงข้อความในห้องแชทปัจจุบันมาแสดง
-current_messages = st.session_state.chats[st.session_state.current_chat]
+  if st.button("➕ สร้างตัวละคร"):
+    if new_name and new_prompt:
+      if new_name not in st.session_state.characters:
+        st.session_state.characters[new_name] = {
+            "prompt": new_prompt,
+            "messages": [],
+        }
+        st.session_state.current_char = new_name
+        st.success(f"สร้างตัวละคร '{new_name}' สำเร็จ!")
+        st.rerun()
+      else:
+        st.warning("ชื่อตัวละครนี้มีอยู่แล้ว")
+    else:
+      st.warning("กรุณากรอกข้อมูลให้ครบ")
 
+  st.divider()
+  st.header("👥 เลือกตัวละคร")
+  char_list = list(st.session_state.characters.keys())
+  selected_char = st.selectbox(
+      "เลือกตัวละคร:",
+      char_list,
+      index=char_list.index(st.session_state.current_char),
+  )
+
+  if selected_char != st.session_state.current_char:
+    st.session_state.current_char = selected_char
+    st.rerun()
+
+  if len(st.session_state.characters) > 1:
+    if st.button("🗑️ ลบตัวละครนี้"):
+      del st.session_state.characters[st.session_state.current_char]
+      st.session_state.current_char = list(
+          st.session_state.characters.keys()
+      )[0]
+      st.rerun()
+
+# ดึงข้อมูลตัวละครปัจจุบัน
+active_char_data = st.session_state.characters[st.session_state.current_char]
+base_prompt = active_char_data["prompt"]
+current_messages = active_char_data["messages"]
+
+# 📌 คำสั่งเสริมบังคับให้ AI ตอบเหมือนคนจริงๆ และเป็นธรรมชาติที่สุด
+human_like_instruction = (
+    f"{base_prompt}\n\n[กฎเหล็กในการตอบ]:\n"
+    "1. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามหลุดคาแรคเตอร์และห้ามบอกว่าตัวเองเป็น AI"
+    " เด็ดขาด\n"
+    "2. พูดจาภาษาคนธรรมดา ใช้น้ำเสียงธรรมชาติเหมือนแชทหากันจริงๆ"
+    " มีการเว้นวรรคพิมพ์สั้นยาวสลับกันไปตามอารมณ์\n"
+    "3. ห้ามตอบแบบทางการ ห้ามใช้ภาษาวิชาการ"
+    " ห้ามมีคำพูดลงท้ายแบบหุ่นยนต์หรือบอท เช่น 'มีอะไรให้ช่วยอีกไหมคะ'\n"
+    "4. แสดงความรู้สึก สีหน้า ท่าทาง หรือใส่อารมณ์ร่วมในบทสนทนาให้สมจริง"
+)
+
+st.subheader(f"💬 กำลังคุยกับ: {st.session_state.current_char}")
+
+# แสดงแชท
 for message in current_messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
 # ช่องพิมพ์ข้อความ
-if user_input := st.chat_input("พิมพ์ข้อความคุยกับมาร์ค..."):
+if user_input := st.chat_input(
+    f"พิมพ์คุยกับ {st.session_state.current_char}..."
+):
   current_messages.append({"role": "user", "content": user_input})
   with st.chat_message("user"):
     st.markdown(user_input)
@@ -104,7 +133,10 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
         chat = client.chats.create(
             model=model_name,
             history=formatted_history if formatted_history else None,
-            config={"system_instruction": character_prompt},
+            config={
+                "system_instruction": human_like_instruction,
+                "temperature": 1.0,  # เพิ่มความสร้างสรรค์และเป็นธรรมชาติให้คำตอบไม่จำเจ
+            },
         )
 
         response = chat.send_message(user_input)
