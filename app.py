@@ -18,14 +18,14 @@ if not api_key:
   st.warning("⚠️ ยังไม่ได้ตั้งค่า GEMINI_API_KEY ใน Streamlit Secrets")
   st.stop()
 
-# เชื่อมต่อกับ Google GenAI SDK
+# เชื่อมต่อกับ Google GenAI SDK (อัปเดตใช้รุ่น gemini-3.8-flash ตามระบบแนะนำ)
 client = genai.Client(api_key=api_key)
-model_name = "gemini-2.5-flash"
+model_name = "gemini-3.8-flash"
 
 # แผงควบคุมเมนูด้านข้าง (Sidebar) สำหรับตั้งค่า
 with st.sidebar:
   st.header("⚙️ ตั้งค่าระบบ")
-  # ช่องใส่บทบาทตัวละคร (ตั้งค่าเริ่มต้นเป็น มาร์ค ต้วน)
+  # ช่องใส่บทบาทตัวละคร
   character_prompt = st.text_area(
       "กำหนดคาแรคเตอร์ตัวละคร:",
       (
@@ -66,17 +66,14 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
       # เตรียมเนื้อหาที่จะส่งไปหา AI (รองรับทั้งข้อความและรูปภาพ)
       contents = []
 
-      # ถ้ามีการอัปโหลดรูปภาพแนบมาด้วย
       image_data = None
       if uploaded_file is not None:
         image_bytes = uploaded_file.getvalue()
         image_data = image_bytes
-        # แปลงรูปให้อยู่ในรูปแบบที่ GenAI SDK รองรับ
         contents.append(
             {"mime_type": uploaded_file.type, "data": image_bytes}
         )
 
-      # จัดเตรียมประวัติการสนทนา
       chat_history = []
       for m in st.session_state.messages[:-1]:
         chat_history.append(f"{m['role']}: {m['content']}")
@@ -88,7 +85,7 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
       )
       contents.append(full_prompt)
 
-      # เรียกใช้งานโมเดล
+      # เรียกใช้งานโมเดล gemini-3.8-flash
       response = client.models.generate_content(
           model=model_name,
           contents=contents,
@@ -97,7 +94,6 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
       bot_response = response.text
       message_placeholder.markdown(bot_response)
 
-      # บันทึกประวัติ
       if image_data:
         st.session_state.messages.append(
             {"role": "assistant", "content": bot_response, "image": image_data}
