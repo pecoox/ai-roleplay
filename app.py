@@ -19,11 +19,49 @@ if not api_key:
   st.stop()
 
 client = genai.Client(api_key=api_key)
-# เปลี่ยนมาใช้รุ่น Flash-Lite เพื่อความเร็วและลดความหนาแน่น
 model_name = "gemini-3.5-flash-lite"
 
-# เมนูด้านข้าง
+# จัดการระบบห้องแชทหลายห้องใน session_state
+if "chats" not in st.session_state:
+  st.session_state.chats = {"แชทหลักของมาร์ค": []}
+if "current_chat" not in st.session_state:
+  st.session_state.current_chat = "แชทหลักของมาร์ค"
+
+# แผงควบคุมเมนูด้านข้าง (Sidebar) สำหรับจัดการแชทและตั้งค่า
 with st.sidebar:
+  st.header("💬 จัดการห้องแชท")
+
+  # ปุ่มสร้างแชทใหม่
+  new_chat_name = st.text_input("ชื่อห้องแชทใหม่:", placeholder="เช่น คุยเรื่องเพลง...")
+  if st.button("➕ สร้างแชทใหม่"):
+    if new_chat_name and new_chat_name not in st.session_state.chats:
+      st.session_state.chats[new_chat_name] = []
+      st.session_state.current_chat = new_chat_name
+      st.rerun()
+
+  st.divider()
+
+  # เลือกห้องแชท
+  chat_list = list(st.session_state.chats.keys())
+  selected_chat = st.selectbox(
+      "เลือกห้องแชท:",
+      chat_list,
+      index=chat_list.index(st.session_state.current_chat),
+  )
+  if selected_chat != st.session_state.current_chat:
+    st.session_state.current_chat = selected_chat
+    st.rerun()
+
+  # ปุ่มลบแชทปัจจุบัน (ห้ามลบถ้าเหลือห้องเดียว)
+  if len(st.session_state.chats) > 1:
+    if st.button("🗑️ ลบห้องแชทนี้"):
+      del st.session_state.chats[st.session_state.current_chat]
+      st.session_state.current_chat = list(st.session_state.chats.keys())[0]
+      st.rerun()
+  else:
+    st.caption("ℹ️ ต้องมีห้องแชทอย่างน้อย 1 ห้อง")
+
+  st.divider()
   st.header("⚙️ ตั้งค่าระบบ")
   character_prompt = st.text_area(
       "คาแรคเตอร์:",
@@ -31,20 +69,19 @@ with st.sidebar:
           "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่ม สุภาพ อบอุ่น"
           " และเป็นกันเองกับแฟนคลับ"
       ),
-      height=120,
+      height=100,
   )
 
-# แสดงประวัติแชท
-if "messages" not in st.session_state:
-  st.session_state.messages = []
+# ดึงข้อความในห้องแชทปัจจุบันมาแสดง
+current_messages = st.session_state.chats[st.session_state.current_chat]
 
-for message in st.session_state.messages:
+for message in current_messages:
   with st.chat_message(message["role"]):
     st.markdown(message["content"])
 
 # ช่องพิมพ์ข้อความ
 if user_input := st.chat_input("พิมพ์ข้อความคุยกับมาร์ค..."):
-  st.session_state.messages.append({"role": "user", "content": user_input})
+  current_messages.append({"role": "user", "content": user_input})
   with st.chat_message("user"):
     st.markdown(user_input)
 
@@ -58,7 +95,7 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
     for attempt in range(max_retries):
       try:
         formatted_history = []
-        for m in st.session_state.messages[:-1]:
+        for m in current_messages[:-1]:
           role_name = "user" if m["role"] == "user" else "model"
           formatted_history.append(
               {"role": role_name, "parts": [{"text": m["content"]}]}
@@ -93,6 +130,4 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
 
     if bot_response:
       message_placeholder.markdown(bot_response)
-      st.session_state.messages.append(
-          {"role": "assistant", "content": bot_response}
-      )
+      current_messages.append({"role": "assistant", "content": bot_response})
