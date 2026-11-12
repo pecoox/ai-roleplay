@@ -51,37 +51,22 @@ if user_input := st.chat_input("พิมพ์ข้อความคุยก
     message_placeholder.markdown("กำลังพิมพ์...")
 
     try:
-      # ใช้ Chat Session แบบต่อเนื่องของ SDK เพื่อความเร็วและจำบทสนทนาได้ดีขึ้น
+      # แปลงประวัติแชทให้อยู่ในรูปแบบโครงสร้างที่ SDK ยอมรับอย่างถูกต้อง
+      formatted_history = []
+      for m in st.session_state.messages[:-1]:
+        role_name = "user" if m["role"] == "user" else "model"
+        formatted_history.append(
+            {"role": role_name, "parts": [{"text": m["content"]}]}
+        )
+
+      # สร้างแชทเซสชันพร้อมประวัติและความจำคาแรคเตอร์
       chat = client.chats.create(
           model=model_name,
-          config={
-              "system_instruction": character_prompt,
-              "temperature": 0.7,
-          },
-      )
-
-      # ส่งประวัติเก่าทั้งหมดให้ AI จำแบบรวดเร็ว
-      for m in st.session_state.messages[:-1]:
-        # จำแนกบทบาทผู้ใช้กับบอท
-        role = "user" if m["role"] == "user" else "model"
-        # ข้ามส่วนที่เป็นข้อความระบบเก่าชั่วคราวเพื่อความเสถียร
-        pass
-
-      # ส่งข้อความล่าสุดเข้าไปคุย
-      # (ใช้ประวัติจาก session_state ส่งแบบรวบยอด)
-      history_payload = []
-      for m in st.session_state.messages[:-1]:
-        history_payload.append({
-            "role": "user" if m["role"] == "user" else "model",
-            "parts": [m["content"]],
-        })
-
-      chat = client.chats.create(
-          model=model_name,
-          history=history_payload,
+          history=formatted_history if formatted_history else None,
           config={"system_instruction": character_prompt},
       )
 
+      # ส่งข้อความล่าสุด
       response = chat.send_message(user_input)
       bot_response = response.text
 
