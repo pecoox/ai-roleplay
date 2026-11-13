@@ -485,7 +485,7 @@ with st.sidebar:
     with st.form("ai_gen_char_form"):
       ai_target_name = st.text_input(
           "ชื่อดารา หรือ ตัวละครหลัก:",
-          placeholder="เช่น ทอม Hiddleston, โรเบิร์ต พัททินสัน...",
+          placeholder="เช่น Mark Tuan, ทอม Hiddleston...",
       )
       ai_submit_btn = st.form_submit_button(
           "🚀 ให้ AI สร้างตัวละครนี้แบบครบชุด", use_container_width=True
@@ -536,7 +536,6 @@ with st.sidebar:
                   "quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม"
               )
 
-              # บันทึกตัวละครหลัก
               cursor.execute(
                   "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                   (
@@ -549,7 +548,6 @@ with st.sidebar:
                   ),
               )
 
-              # บันทึกตัวละครเสริม
               cursor.execute(
                   "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
                   (
@@ -561,7 +559,6 @@ with st.sidebar:
                   ),
               )
 
-              # สร้างภารกิจเริ่มต้น
               cursor.execute(
                   "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
                   (c_name, q_desc, 20),
@@ -814,7 +811,7 @@ with st.sidebar:
     st.markdown(f"### 🎯 จัดการภารกิจ: {active_char}")
     with st.form(f"add_quest_form_{active_char}", clear_on_submit=True):
       new_quest_desc = st.text_input("รายละเอียดภารกิจใหม่:")
-      new_quest_pts = st.slider("คะแนนรางวัล:", 5, 50, 15, key=f"q_pts_{active_char}")
+      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15, key=f"q_pts_{active_char}")
       if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and new_quest_desc:
         cursor.execute(
             "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
@@ -826,15 +823,15 @@ with st.sidebar:
 
     st.markdown("---")
     cursor.execute(
-        "SELECT id, task_desc FROM quests WHERE char_name = ?",
+        "SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?",
         (active_char,),
     )
     q_list = cursor.fetchall()
     if q_list:
-      for q_id, q_desc in q_list:
+      for q_id, q_desc, q_pts in q_list:
         q_col1, q_col2 = st.columns([4, 1])
         with q_col1:
-          st.markdown(f"- **[#{q_id}]** {q_desc}")
+          st.markdown(f"- **[#{q_id}]** {q_desc} `(+{q_pts} แต้ม)`")
         with q_col2:
           if st.button("🗑️", key=f"del_q_{active_char}_{q_id}"):
             cursor.execute("DELETE FROM quests WHERE id = ?", (q_id,))
@@ -1157,7 +1154,7 @@ if st.session_state.in_chat and st.session_state.current_char:
 [กฎการตอบ]:
 1. ตอบสไตล์นิยายบรรยาย ใส่ท่าทางความรู้สึกด้วยเครื่องหมาย *...* สวมบทบาท 100%
 2. บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ:
-{{"score_change": [ตัวเลขเช่น 5 หรือ -2], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [ไอดีภารกิจหรือ null]}}
+{{"score_change": [ตัวเลขเช่น 5 หรือ -2], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}}
 """
 
 
@@ -1253,22 +1250,33 @@ if st.session_state.in_chat and st.session_state.current_char:
           )
         with col_pop:
           with st.popover("🎯 ภารกิจ", use_container_width=True):
-            st.markdown("#### 🎯 ภารกิจ")
+            st.markdown("#### 🎯 รายการภารกิจ")
             cursor.execute(
                 "SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?",
                 (st.session_state.current_char,),
             )
-            for q_id, desc, pts in cursor.fetchall():
-              cursor.execute(
-                  "SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?",
-                  (current_user, q_id),
-              )
-              uq = cursor.fetchone()
-              is_comp = uq[0] if uq else 0
-              if is_comp:
-                st.markdown(f"- ✅ ~~{desc}~~ (+{pts})")
-              else:
-                st.markdown(f"- ⏳ {desc} (รางวัล: {pts})")
+            quests_in_db = cursor.fetchall()
+            if quests_in_db:
+              for q_id, desc, pts in quests_in_db:
+                cursor.execute(
+                    "SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?",
+                    (current_user, q_id),
+                )
+                uq = cursor.fetchone()
+                is_comp = uq[0] if uq else 0
+
+                if is_comp:
+                  st.markdown(
+                      f"- ✅ **[#{q_id}]** ~~{desc}~~ — *สำเร็จแล้ว* (+{pts}"
+                      " แต้ม)"
+                  )
+                else:
+                  st.markdown(
+                      f"- ⏳ **[#{q_id}]** {desc} — *ยังไม่สำเร็จ* (รางวัล:"
+                      f" {pts} แต้ม)"
+                  )
+            else:
+              st.caption("ยังไม่มีภารกิจในระบบ")
 
         st.markdown(message["content"])
         if message["image"]:
