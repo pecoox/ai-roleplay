@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม (ปรับขนาดการ์ดและรูปภาพให้เท่ากันและพอดีตา)
+# 🎨 ดีไซน์ CSS พรีเมียม (ปรับแต่งการ์ดและรูปภาพให้สวยงาม สมส่วน ไม่ยืดเบี้ยว)
 st.markdown(
     """
     <style>
@@ -40,12 +40,25 @@ st.markdown(
         font-weight: bold;
     }
 
-    /* 🖼️ ควบคุมขนาดรูปภาพการ์ดตัวละครในหน้าแรกให้เท่ากันเป๊ะ */
+    /* 🖼️ ปรับแต่งรูปภาพในการ์ดหน้าแรกให้สวยงาม ไม่ยืด และขนาดเท่ากัน */
+    div[data-testid="stImage"] {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
     div[data-testid="stImage"] img {
-        height: 220px !important;
-        object-fit: cover !important;
-        border-radius: 12px !important;
+        height: 240px !important;
         width: 100% !important;
+        object-fit: cover !important;
+        border-radius: 16px !important;
+        transition: transform 0.3s ease;
+    }
+    div[data-testid="stImage"] img:hover {
+        transform: scale(1.03);
     }
     </style>
 """,
@@ -1080,7 +1093,6 @@ if not st.session_state.in_chat:
   if not all_chars:
     st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
   else:
-    # แบ่งคอลัมน์แสดงผล (เพิ่มจำนวนคอลัมน์เพื่อให้การ์ดมีขนาดพอดี ไม่ใหญ่เกินไป)
     cols = st.columns(4)
     for idx, c_name in enumerate(all_chars):
       cursor.execute(
