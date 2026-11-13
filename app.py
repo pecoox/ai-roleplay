@@ -471,6 +471,7 @@ with st.sidebar:
             "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
             "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
+            "🗑️ ลบตัวละครหลัก",
             "👥 จัดการตัวละครเสริม",
             "🎯 จัดการภารกิจ (Quest Log)",
             "🖼️ จัดการคลังรูปภาพ",
@@ -607,7 +608,7 @@ with st.sidebar:
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
 
-  # 🌐 ฟีเจอร์ใหม่: ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI
+  # 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI
   elif is_current_admin and sidebar_action == "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI":
     st.markdown("### 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์")
     st.caption(
@@ -645,7 +646,6 @@ with st.sidebar:
                   "ไม่สามารถดึงข้อมูลดิบจากเว็บได้โดยตรง แต่ลิงก์คือ: " + web_url
               )
 
-            # ใช้ Regular Expression ในการล้างแท็ก HTML ออกทั้งหมด
             clean_text = re.sub(
                 r"<script.*?>.*?</script>",
                 "",
@@ -743,6 +743,60 @@ with st.sidebar:
               )
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการดึงเว็บ: {e}")
+
+  # 🗑️ ฟีเจอร์ใหม่: ลบตัวละครหลัก
+  elif is_current_admin and sidebar_action == "🗑️ ลบตัวละครหลัก":
+    st.markdown("### 🗑️ ลบตัวละครหลักที่ไม่ต้องการ")
+    st.warning(
+        "⚠️ คำเตือน: การลบตัวละครจะทำการลบข้อมูลทั้งหมดของตัวละครนั้น รวมถึงประวัติแชท"
+        " ตัวละครเสริม ภารกิจ และคลังรูปภาพอย่างถาวร!"
+    )
+
+    if all_chars:
+      with st.form("delete_char_form"):
+        target_char_to_delete = st.selectbox(
+            "เลือกตัวละครที่ต้องการลบ:", all_chars
+        )
+        confirm_del = st.form_submit_button(
+            "🗑️ ยืนยันการลบตัวละครนี้", use_container_width=True
+        )
+
+        if confirm_del and target_char_to_delete:
+          # ลบข้อมูลจากทุกตารางที่เกี่ยวข้อง
+          cursor.execute(
+              "DELETE FROM characters WHERE name = ?", (target_char_to_delete,)
+          )
+          cursor.execute(
+              "DELETE FROM supporting_characters WHERE char_name = ?",
+              (target_char_to_delete,),
+          )
+          cursor.execute(
+              "DELETE FROM character_status WHERE char_name = ?",
+              (target_char_to_delete,),
+          )
+          cursor.execute(
+              "DELETE FROM quests WHERE char_name = ?",
+              (target_char_to_delete,),
+          )
+          cursor.execute(
+              "DELETE FROM character_photos WHERE char_name = ?",
+              (target_char_to_delete,),
+          )
+          cursor.execute(
+              "DELETE FROM messages WHERE char_name = ?",
+              (target_char_to_delete,),
+          )
+          conn.commit()
+
+          st.success(
+              f"🗑️ ลบตัวละคร '{target_char_to_delete}' เรียบร้อยแล้ว!"
+          )
+          st.session_state.current_char = None
+          st.session_state.in_chat = False
+          time.sleep(1)
+          st.rerun()
+    else:
+      st.info("ไม่มีตัวละครในระบบให้ลบ")
 
   # 1. สร้างตัวละครหลักใหม่ (Manual)
   elif is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่ (Manual)":
