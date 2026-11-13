@@ -31,10 +31,12 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite (เพิ่มตารางเก็บคลังรูปภาพของตัวละคร)
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบตรวจสอบและเพิ่มคอลัมน์อัตโนมัติ
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
+
+  # สร้างตารางหลักถ้ายังไม่มี
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -43,6 +45,13 @@ def init_db():
             avatar BLOB
         )
     """)
+
+  # ตรวจสอบว่ามีคอลัมน์ lore หรือยัง (ป้องกัน Error กรณีฐานข้อมูลเก่า)
+  cursor.execute("PRAGMA table_info(characters)")
+  columns = [col[1] for col in cursor.fetchall()]
+  if "lore" not in columns:
+    cursor.execute("ALTER TABLE characters ADD COLUMN lore TEXT")
+
   # ตารางเก็บคลังรูปภาพประจำตัวละคร
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
@@ -51,6 +60,8 @@ def init_db():
             photo BLOB
         )
     """)
+
+  # ตารางเก็บประวัติแชท
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,9 +127,11 @@ with st.sidebar:
   st.markdown("### 🛠️ สร้างตัวละครใหม่")
 
   with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=False):
-    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น มดอ้วน...")
+    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น เทพเจ้าแห่งแม่น้ำ...")
     new_prompt = st.text_area(
-        "คาแรคเตอร์สั้นๆ:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=60
+        "คาแรคเตอร์สั้นๆ:",
+        placeholder="คุณคือเทพเจ้าขี้เล่น...",
+        height=60,
     )
     new_lore = st.text_area(
         "ข้อมูลเชิงลึก (Lore/ประวัติ):",
@@ -169,7 +182,7 @@ with st.sidebar:
     st.session_state.current_char = selected_char
     st.rerun()
 
-  # 🖼️ เพิ่มเมนูจัดการ "คลังรูปภาพของตัวละครนี้" (เพื่อให้ตัวละครมีรูปส่งให้ดู)
+  # คลังรูปภาพของตัวละคร
   st.divider()
   st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
   uploaded_gallery_photos = st.file_uploader(
@@ -188,7 +201,6 @@ with st.sidebar:
     st.success("เพิ่มรูปเข้าคลังสำเร็จ!")
     st.rerun()
 
-  # แสดงจำนวนรูปในคลังปัจจุบัน
   cursor.execute(
       "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
       (st.session_state.current_char,),
@@ -222,9 +234,9 @@ cursor.execute(
     (st.session_state.current_char,),
 )
 char_data = cursor.fetchone()
-base_prompt = char_data[0]
-char_lore = char_data[1]
-char_avatar_blob = char_data[2]
+base_prompt = char_data[0] if char_data and char_data[0] else ""
+char_lore = char_data[1] if char_data and char_data[1] else ""
+char_avatar_blob = char_data[2] if char_data else None
 
 char_avatar_img = None
 if char_avatar_blob:
@@ -250,7 +262,7 @@ else:
   )
   temp_val = 0.9
 
-# ดึงข้อความแชทพร้อมรูปภาพที่บันทึกไว้
+# ดึงข้อความแชท
 cursor.execute(
     "SELECT role, content, image_blob FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
@@ -331,7 +343,7 @@ if user_input := st.chat_input(
         response = chat.send_message(user_input)
         bot_response = response.text
 
-        # 📸 สุ่มดึงรูปจากคลังรูปภาพของตัวละครนี้มาส่ง (โอกาส 30% ถ้ามีรูปในคลัง)
+        # สุ่มดึงรูปจากคลังรูปภาพของตัวละครนี้มาส่ง (30%)
         cursor.execute(
             "SELECT photo FROM character_photos WHERE char_name = ?",
             (st.session_state.current_char,),
