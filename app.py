@@ -3,35 +3,10 @@ import streamlit as st
 import time
 
 st.set_page_config(
-    page_title="AI Roleplay - Premium UI", page_icon="💖", layout="centered"
+    page_title="AI Novel & Roleplay", page_icon="📖", layout="centered"
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม: กล่องแชทโค้งมน มีมิติ และอ่านง่ายในทุกธีม
-st.markdown(
-    """
-    <style>
-    /* ปรับแต่งภาพรวมของข้อความแชท */
-    .stChatMessage {
-        border-radius: 20px !important;
-        padding: 15px 20px !important;
-        margin-bottom: 16px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    /* ซ่อน Header และ Footer มาตรฐาน */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* ตกแต่งแถบ Sidebar ให้ดูสะอาดตา */
-    [data-testid="stSidebar"] {
-        background-color: rgba(0, 0, 0, 0.02);
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
-st.title("💖 AI Roleplay: Premium Chat")
+st.title("📖 AI Roleplay & Novel Style: สไตล์นิยายบรรยาย")
 
 # ดึง API Key
 try:
@@ -63,19 +38,25 @@ if "current_char" not in st.session_state:
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
-  st.header("✨ ควบคุมระบบ")
+  st.header("⚙️ ตั้งค่าสไตล์การคุย")
+  # เลือกโหมดการตอบ
   chat_mode = st.radio(
-      "เลือกสไตล์การคุย:", ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว"]
+      "เลือกรูปแบบการตอบ:",
+      ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว & ชวนคุยต่อเนื่อง"],
   )
 
   st.divider()
-  st.subheader("➕ สร้างตัวละครใหม่")
-  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, ไอดอล...")
+  st.header("✨ สร้างตัวละครใหม่")
+  new_name = st.text_input(
+      "ชื่อตัวละคร:", placeholder="เช่น พระเอกนิยาย, แฟนหนุ่ม..."
+  )
   new_prompt = st.text_area(
-      "คาแรคเตอร์:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=90
+      "กำหนดคาแรคเตอร์:",
+      placeholder="คุณคือมาเฟียหนุ่มผู้เย็นชาแต่คลั่งรัก...",
+      height=100,
   )
 
-  if st.button("🚀 สร้างตัวละคร", use_container_width=True):
+  if st.button("➕ สร้างตัวละคร"):
     if new_name and new_prompt:
       if new_name not in st.session_state.characters:
         st.session_state.characters[new_name] = {
@@ -83,18 +64,18 @@ with st.sidebar:
             "messages": [],
         }
         st.session_state.current_char = new_name
-        st.success(f"สร้าง '{new_name}' สำเร็จ!")
+        st.success(f"สร้างตัวละคร '{new_name}' สำเร็จ!")
         st.rerun()
       else:
-        st.warning("ชื่อนี้มีอยู่แล้ว")
+        st.warning("ชื่อตัวละครนี้มีอยู่แล้ว")
     else:
-      st.warning("กรอกข้อมูลให้ครบถ้วน")
+      st.warning("กรุณากรอกข้อมูลให้ครบ")
 
   st.divider()
-  st.subheader("👥 เลือกตัวละคร")
+  st.header("👥 เลือกตัวละคร")
   char_list = list(st.session_state.characters.keys())
   selected_char = st.selectbox(
-      "สลับแชทกับ:",
+      "เลือกตัวละคร:",
       char_list,
       index=char_list.index(st.session_state.current_char),
   )
@@ -104,7 +85,7 @@ with st.sidebar:
     st.rerun()
 
   if len(st.session_state.characters) > 1:
-    if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
+    if st.button("🗑️ ลบตัวละครนี้"):
       del st.session_state.characters[st.session_state.current_char]
       st.session_state.current_char = list(
           st.session_state.characters.keys()
@@ -115,52 +96,47 @@ with st.sidebar:
 active_char_data = st.session_state.characters[st.session_state.current_char]
 base_prompt = active_char_data["prompt"]
 
-# กำหนด System Instruction ตามโหมด
+# 📌 ปรับแต่งคำสั่งตามโหมดที่เลือก
 if "นิยาย" in chat_mode:
   roleplay_instruction = (
-      f"{base_prompt}\n\n[กฎการตอบ]:\n"
-      "1. เขียนตอบสไตล์นิยายบรรยาย มีท่าทาง สีหน้า ความรู้สึก (ใช้เครื่องหมาย *"
-      " ครอบการกระทำ)\n"
-      "2. สวมบทบาท 100% ห้ามบอกว่าเป็น AI\n"
-      "3. เมื่อจบตอน ให้ตั้งคำถามหรือเปิดฉากเพื่อให้ผู้ใช้เลือกตอบต่อ"
+      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดนิยายบรรยาย]:\n"
+      "1. เขียนตอบให้มีความยาวมากขึ้นในรูปแบบ 'นิยายแชท/บทบรรยาย' (Novel"
+      " Style) มีการบรรยายท่าทาง สีหน้า แววตา หรือบรรยากาศรอบตัวประกอบด้วย"
+      " (ใช้เครื่องหมายดอกจัน * หรือวงเล็บ เพื่อสื่อถึงการกระทำ เช่น *เขยิบเข้าไปใกล้*)"
+      "\n2. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n3."
+      " เมื่อบรรยายจบเรื่องราวในแต่ละตอน ให้ 'ตั้งคำถามหรือเปิดฉากสนทนา' เพื่อโยนบทกลับมาให้ผู้ใช้เป็นคนตัดสินใจเลือกตอบหรือกระทำต่อ"
+      " เพื่อดำเนินเรื่องราวร่วมกันต่อไป"
   )
-  temp_val = 1.1
+  temperature_val = 1.1
 else:
   roleplay_instruction = (
-      f"{base_prompt}\n\n[กฎการตอบ]:\n"
-      "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี\n"
-      "2. ห้ามใช้คำพูดเชิงบอทหรือคำทางการ\n"
-      "3. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์"
+      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดแชทปกติ]:\n"
+      "1. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n"
+      "2. พูดจาภาษาคนธรรมดา ใช้น้ำเสียงธรรมชาติเหมือนแชทหากันจริงๆ"
+      " พิมพ์ตอบสั้นกระชับเป็นธรรมชาติ\n"
+      "3. ห้ามมีคำพูดลงท้ายแบบบอท เช่น 'มีอะไรให้ช่วยอีกไหมคะ'"
   )
-  temp_val = 0.9
+  temperature_val = 0.9
 
 current_messages = active_char_data["messages"]
+st.subheader(f"📖 กำลังสวมบทบาทกับ: {st.session_state.current_char}")
 
-st.markdown(
-    f"### 💬 ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`"
-)
-st.divider()
-
-# แสดงประวัติแชท
+# แสดงแชท
 for message in current_messages:
-  if message["role"] == "user":
-    with st.chat_message("user", avatar="👤"):
-      st.markdown(message["content"])
-  else:
-    with st.chat_message("assistant", avatar="✨"):
-      st.markdown(message["content"])
+  with st.chat_message(message["role"]):
+    st.markdown(message["content"])
 
 # ช่องพิมพ์ข้อความ
 if user_input := st.chat_input(
-    f"ส่งข้อความหา {st.session_state.current_char}..."
+    f"พิมพ์โต้ตอบกับ {st.session_state.current_char}..."
 ):
   current_messages.append({"role": "user", "content": user_input})
-  with st.chat_message("user", avatar="👤"):
+  with st.chat_message("user"):
     st.markdown(user_input)
 
-  with st.chat_message("assistant", avatar="✨"):
+  with st.chat_message("assistant"):
     message_placeholder = st.empty()
-    message_placeholder.markdown("กำลังพิมพ์...")
+    message_placeholder.markdown("กำลังร้อยเรียงเรื่องราว...")
 
     bot_response = None
     max_retries = 3
@@ -179,7 +155,7 @@ if user_input := st.chat_input(
             history=formatted_history if formatted_history else None,
             config={
                 "system_instruction": roleplay_instruction,
-                "temperature": temp_val,
+                "temperature": temperature_val,
             },
         )
 
