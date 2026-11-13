@@ -443,10 +443,8 @@ with st.sidebar:
   else:
     sidebar_action = "เลือกตัวละคร"
 
-  if all_chars and sidebar_action not in [
-      "➕ สร้างตัวละครหลักใหม่",
-      "👥 จัดการผู้ใช้งานระบบ",
-  ]:
+  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ผูกให้ตรงกันเรียบร้อย)
+  if all_chars:
     st.divider()
     selected_char = st.selectbox(
         "เลือกตัวละครหลัก:",
@@ -456,6 +454,7 @@ with st.sidebar:
             if st.session_state.current_char in all_chars
             else 0
         ),
+        key="global_char_selector",
     )
     if (
         not st.session_state.current_char
