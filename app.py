@@ -468,7 +468,7 @@ with st.sidebar:
         "เลือกการจัดการ:",
         [
             "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-            "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
+            "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
             "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
             "🗑️ ลบตัวละครหลัก",
@@ -484,7 +484,7 @@ with st.sidebar:
   # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
   if all_chars and sidebar_action not in [
       "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-      "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
+      "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
   ]:
     st.divider()
     selected_char = st.selectbox(
@@ -608,70 +608,42 @@ with st.sidebar:
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
 
-  # 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI
-  elif is_current_admin and sidebar_action == "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI":
-    st.markdown("### 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์")
+  # 🌐 ปรับปรุงใหม่: นำเข้าตัวละครด้วยลิงก์หรือก๊อปปี้ข้อความรายละเอียดจากเว็บมาแปะ
+  elif is_current_admin and sidebar_action == "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ":
+    st.markdown("### 🌐 นำเข้าตัวละครจากเว็บ AI / ข้อมูลโปรไฟล์")
     st.caption(
-        "วางลิงก์เว็บไซต์ แล้วให้ AI ดึงข้อมูลเนื้อหามาวิเคราะห์สร้างตัวละครให้อัตโนมัติ!"
+        "เนื่องจากเว็บไซต์ตัวละครส่วนใหญ่ (เช่น Lovecube) บล็อกการดึงข้อมูลอัตโนมัติ"
+        " แนะนำให้ **ก๊อปปี้ชื่อและประวัติบุคลิกจากหน้าเว็บมาวางในช่องด้านล่างนี้ได้เลยครับ!**"
     )
 
-    with st.form("web_scrape_char_form"):
-      web_url = st.text_input(
-          "ลิงก์เว็บไซต์ (URL):",
-          placeholder="https://www.lovecube.ai/?character=...",
+    with st.form("web_paste_char_form"):
+      import_text = st.text_area(
+          "วางข้อมูลตัวละคร / ลิงก์ / รายละเอียดจากเว็บ:",
+          placeholder=(
+              "เช่น: มิราเจน สเตาร์ส นางแบบสาวแสนสวย... (ก๊อปปี้ข้อความจากหน้าเว็บมาวางตรงนี้ได้เลย)"
+          ),
+          height=150,
       )
-      web_submit_btn = st.form_submit_button(
-          "🚀 ดึงข้อมูลและสร้างตัวละคร", use_container_width=True
+      import_submit_btn = st.form_submit_button(
+          "🚀 ให้ AI แปลงข้อมูลนี้เป็นตัวละคร Roleplay",
+          use_container_width=True,
       )
 
-      if web_submit_btn and web_url:
+      if import_submit_btn and import_text:
         with st.spinner(
-            f"กำลังดึงข้อมูลและให้ AI วิเคราะห์เนื้อหาจาก {web_url}..."
+            "กำลังให้ AI วิเคราะห์ข้อมูลและจัดรูปแบบตัวละครให้อัตโนมัติ..."
         ):
           try:
-            req = urllib.request.Request(
-                web_url,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-                    )
-                },
-            )
-            html_content = ""
-            try:
-              with urllib.request.urlopen(req, timeout=10) as response:
-                html_content = response.read().decode("utf-8", errors="ignore")
-            except Exception:
-              html_content = (
-                  "ไม่สามารถดึงข้อมูลดิบจากเว็บได้โดยตรง แต่ลิงก์คือ: " + web_url
-              )
-
-            clean_text = re.sub(
-                r"<script.*?>.*?</script>",
-                "",
-                html_content,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            clean_text = re.sub(
-                r"<style.*?>.*?</style>",
-                "",
-                clean_text,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            clean_text = re.sub(r"<.*?>", " ", clean_text)
-            text_data = re.sub(r"\s+", " ", clean_text).strip()[:15000]
-
             prompt_gen = (
-                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลเว็บให้เป็นตัวละคร Roleplay\n"
-                f"ลิงก์เว็บ: {web_url}\n"
-                f"เนื้อหาที่ดึงมาได้: {text_data}\n\n"
-                f"กรุณาสรุปและสร้างข้อมูลตัวละครในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลตัวละครให้เป็นรูปแบบ Roleplay\n"
+                f"ข้อมูลที่ผู้ใช้นำมาวาง: {import_text}\n\n"
+                f"กรุณาวิเคราะห์และสร้างข้อมูลตัวละครในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
                 "{\n"
-                '  "name": "ชื่อตัวละคร",\n'
-                '  "prompt": "คาแรคเตอร์หลักและบทบาทจากเนื้อหาเว็บ",\n'
-                '  "personality": "บุคลิกและนิสัยใจคอ",\n'
+                '  "name": "ชื่อตัวละครหลัก",\n'
+                '  "prompt": "คาแรคเตอร์หลักและบทบาท",\n'
+                '  "personality": "บุคลิกและนิสัยใจคอตามข้อมูล",\n'
                 '  "lore": "เรื่องราวพื้นหลัง",\n'
-                '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2"],\n'
+                '  "first_messages": ["ข้อความเปิดตัวที่ 1", "ข้อความเปิดตัวที่ 2"],\n'
                 '  "sub_name": "ชื่อตัวละครเสริมที่เกี่ยวข้อง 1 คน",\n'
                 '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
                 '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
@@ -689,9 +661,9 @@ with st.sidebar:
               ]
               char_info = json.loads(json_text)
 
-              c_name = char_info.get("name", "ตัวละครจากเว็บ")
+              c_name = char_info.get("name", "ตัวละครนำเข้า")
               c_prompt = char_info.get("prompt", "คุณคือ...")
-              c_pers = char_info.get("personality", "น่าสนใจ...")
+              c_pers = char_info.get("personality", "มีเสน่ห์...")
               c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
               f_msgs = char_info.get(
                   "first_messages",
@@ -734,17 +706,17 @@ with st.sidebar:
               st.session_state.current_char = c_name
               st.session_state.in_chat = True
               st.success(
-                  f"🎉 ดึงข้อมูลและสร้างตัวละคร '{c_name}' จากเว็บไซต์สำเร็จเรียบร้อยแล้ว!"
+                  f"🎉 นำเข้าและสร้างตัวละคร '{c_name}' สำเร็จเรียบร้อยแล้ว!"
               )
               st.rerun()
             else:
               st.error(
-                  "ไม่สามารถแปลงข้อมูลจากเว็บไซต์ได้ กรุณาลองใหม่อีกครั้งหรือตรวจสอบลิงก์"
+                  "ไม่สามารถแปลงข้อมูลได้ กรุณาลองตรวจสอบข้อความแล้วลองใหม่อีกครั้ง"
               )
           except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการดึงเว็บ: {e}")
+            st.error(f"เกิดข้อผิดพลาด: {e}")
 
-  # 🗑️ ฟีเจอร์ใหม่: ลบตัวละครหลัก
+  # 🗑️ ลบตัวละครหลัก
   elif is_current_admin and sidebar_action == "🗑️ ลบตัวละครหลัก":
     st.markdown("### 🗑️ ลบตัวละครหลักที่ไม่ต้องการ")
     st.warning(
@@ -762,7 +734,6 @@ with st.sidebar:
         )
 
         if confirm_del and target_char_to_delete:
-          # ลบข้อมูลจากทุกตารางที่เกี่ยวข้อง
           cursor.execute(
               "DELETE FROM characters WHERE name = ?", (target_char_to_delete,)
           )
@@ -1208,7 +1179,7 @@ with st.sidebar:
       not in [
           "➕ สร้างตัวละครหลักใหม่ (Manual)",
           "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-          "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
+          "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
       ]
   ):
     st.info("ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
