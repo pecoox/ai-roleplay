@@ -880,8 +880,8 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มดูภารกิจและปุ่มรีเซ็ตแชทแบบเห็นเด่นชัดด้านบน
-  col_av, col_title, col_quest_btn, col_reset = st.columns([1, 4, 1.5, 1.5])
+  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มรีเซ็ตแชท
+  col_av, col_title, col_reset = st.columns([1, 6, 2])
   with col_av:
     if char_avatar_img:
       st.image(char_avatar_img, width=60)
@@ -889,12 +889,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
   with col_title:
     st.markdown(f"### แชทกับ: `{st.session_state.current_char}`")
-  with col_quest_btn:
-    if "show_quests" not in st.session_state:
-      st.session_state.show_quests = False
-    if st.button("🎯 ดูภารกิจ", use_container_width=True):
-      st.session_state.show_quests = not st.session_state.show_quests
-      st.rerun()
   with col_reset:
     if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
       cursor.execute(
@@ -925,7 +919,10 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.success("รีเซ็ตบทสนทนาสำเร็จ!")
       st.rerun()
 
-  # แสดงหน้าต่างภารกิจด้านบนสุดเมื่อกดปุ่มดูภารกิจ
+  if "show_quests" not in st.session_state:
+    st.session_state.show_quests = False
+
+  # แสดงหน้าต่างภารกิจด้านบนสุดเมื่อกดปุ่มดูภารกิจจากข้อความ AI
   if st.session_state.show_quests:
     with st.container(border=True):
       st.markdown("#### 🎯 ภารกิจทั้งหมด (Quest Log)")
@@ -962,10 +959,22 @@ if st.session_state.in_chat and st.session_state.current_char:
     else:
       avatar_icon = char_avatar_img if char_avatar_img else "✨"
       with st.chat_message("assistant", avatar=avatar_icon):
-        st.markdown(
-            f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
-            unsafe_allow_html=True,
-        )
+        # 💖 แถบสถานะความชอบ พร้อมปุ่มกดดูภารกิจฝังอยู่บนหัวข้อความ AI ทุกข้อความ
+        badge_col1, badge_col2 = st.columns([4, 1])
+        with badge_col1:
+          st.markdown(
+              f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
+              unsafe_allow_html=True,
+          )
+        with badge_col2:
+          if st.button(
+              "🎯 ภารกิจ",
+              key=f"quest_btn_{random.randint(1, 100000)}",
+              use_container_width=True,
+          ):
+            st.session_state.show_quests = not st.session_state.show_quests
+            st.rerun()
+
         st.markdown(message["content"])
         if message["image"]:
           st.image(message["image"], width=280)
