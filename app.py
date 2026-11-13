@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม
+# 🎨 ดีไซน์ CSS พรีเมียม (ปรับสีส่วนบรรยาย *...* ให้จางลงและเป็นตัวเอียงเพื่อให้อ่านง่าย)
 st.markdown(
     """
     <style>
@@ -38,6 +38,12 @@ st.markdown(
         font-size: 12px;
         color: #ff99cc;
         font-weight: bold;
+    }
+
+    /* 🖋️ ปรับแต่งสไตล์ข้อความบรรยายและการกระทำในแชทให้เป็นสีเทาอ่อน/ตัวเอียง */
+    .stChatMessage p em, .stChatMessage em {
+        color: #94a3b8 !important;
+        font-style: italic !important;
     }
     </style>
 """,
@@ -1162,9 +1168,9 @@ if st.session_state.in_chat and st.session_state.current_char:
       (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
   )
 
-  # ✍️ อัปเกรด System Instruction เน้นสไตล์นิยาย พรีเมียม และมีตัวละครเสริมแจม
+  # ✍️ ปรับ System Prompt ให้เน้นการขึ้นบรรทัดใหม่ระหว่างการบรรยายและบทพูดให้อ่านง่ายยิ่งขึ้น
   roleplay_instruction = f"""
-คุณคือนักเขียนนิยายและผู้สวมบทบาท (Roleplayer) ตัวละครหลักชื่อ '{st.session_state.current_char}' 
+คุณคือนักเขียนนิยายโรแมนติก/ดราม่าและผู้สวมบทบาทมืออาชีพ ตัวละครหลักชื่อ '{st.session_state.current_char}'
 - ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
 - นิสัย: {char_personality}
 - เรื่องราวพื้นหลัง (Lore): {char_lore}
@@ -1174,12 +1180,11 @@ if st.session_state.in_chat and st.session_state.current_char:
 - ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
 [กฎการเขียนบทบาท - เคร่งครัด]:
-1. **สไตล์นิยายบรรยายขั้นสูง**: บรรยายบรรยากาศ ท่าทาง สีหน้า แววตา และภาษากายให้ออกมาเห็นภาพชัดเจน
-2. **แยกคำพูดและการกระทำ/ความคิดชัดเจน**: 
-   - คำพูดตัวละครให้อยู่ในเครื่องหมายคำพูด เช่น "{st.session_state.current_char}: \"...\""
-   - ท่าทาง บรรยากาศ และ **ความคิดในใจ (Inner Thoughts)** ให้อยู่ในเครื่องหมายดอกจัน เช่น *... (คิดในใจว่า...) *
-3. **การมีส่วนร่วมของตัวละครเสริม**: ให้ดึงตัวละครเสริมที่มีอยู่ในเรื่องเข้ามามีบทบาทพูดคุย หรือโต้ตอบกับตัวละครหลักและผู้เล่นบ้างตามความเหมาะสม เพื่อสร้างสีสันเหมือนฉากในนิยาย
-4. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
+1. **จัดรูปแบบให้อ่านง่ายเป็นสัดส่วน**: 
+   - ส่วนบรรยาย ท่าทาง สีหน้า แววตา และ **ความคิดในใจ (Inner Thoughts)** ให้เขียนไว้ในเครื่องหมายดอกจัน *...* (ระบบจะแสดงผลเป็นสีเทาอ่อนและตัวเอียงอัตโนมัติ)
+   - ส่วนบทพูด (Dialogue) ให้อยู่ในเครื่องหมายคำพูดปกติ เช่น "{st.session_state.current_char}: \"...\""
+2. **การมีส่วนร่วมของตัวละครเสริม**: ให้ดึงตัวละครเสริมที่มีในเรื่องเข้ามามีบทบาทพูดคุย โต้ตอบ หรือสร้างปฏิกิริยากับตัวละครหลักและผู้เล่นบ้างเพื่อเพิ่มความมีชีวิตชีวา
+3. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
 {{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}}
 """
 
@@ -1191,7 +1196,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         return random.choice(msgs)
     except Exception:
       pass
-    return f"*มองหน้าคุณด้วยแววตานิ่งสงบ* \"สวัสดีครับ {u_name} มีอะไรให้ผมช่วยหรือเปล่า?\""
+    return f"*ปรายตามองคุณด้วยความเรียบเฉย ก่อนจะแค่นหัวเราะในลำคอเบาๆ* \"มีธุระอะไร ถึงได้มาเกาะแกะอยู่แถวนี้ล่ะ?\""
 
 
   cursor.execute(
@@ -1341,7 +1346,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       try:
         score_change = int(user_input.replace("/+ชอบ ", "").strip())
         bot_response = (
-            f"*(ระบบทดสอบ: เพิ่มแต้มความชอบสะสมให้ {score_change}"
+            f"*(สังเกตการณ์ระบบ: เพิ่มแต้มความชอบสะสมให้ {score_change}"
             " คะแนนเรียบร้อย)*"
         )
       except Exception:
@@ -1356,10 +1361,10 @@ if st.session_state.in_chat and st.session_state.current_char:
         )
         q_data = cursor.fetchone()
         if q_data:
-          bot_response = f"*(ระบบทดสอบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
+          bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
         else:
           bot_response = (
-              f"*(ระบบทดสอบ: ไม่พบภารกิจหมายเลข #{completed_q_id} ในระบบ)*"
+              f"*(สังเกตการณ์ระบบ: ไม่พบภารกิจหมายเลข #{completed_q_id} ในระบบ)*"
           )
           completed_q_id = None
       except Exception:
