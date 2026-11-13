@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม (ปรับแต่งการ์ดและรูปภาพให้สวยงาม สมส่วน ไม่ยืดเบี้ยว)
+# 🎨 ดีไซน์ CSS พรีเมียม (ปรับแต่งการ์ดหน้าแรกให้สวยงามทันสมัยแบบแอปแชทดัง)
 st.markdown(
     """
     <style>
@@ -40,25 +40,21 @@ st.markdown(
         font-weight: bold;
     }
 
-    /* 🖼️ ปรับแต่งรูปภาพในการ์ดหน้าแรกให้สวยงาม ไม่ยืด และขนาดเท่ากัน */
+    /* 🖼️ ปรับแต่งรูปภาพการ์ดหน้าแรกให้เต็มกรอบสวยงาม สัดส่วนเป๊ะ */
     div[data-testid="stImage"] {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: rgba(0, 0, 0, 0.2);
         border-radius: 16px;
         overflow: hidden;
-        margin-bottom: 10px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     }
     div[data-testid="stImage"] img {
-        height: 240px !important;
+        height: 260px !important;
         width: 100% !important;
         object-fit: cover !important;
         border-radius: 16px !important;
-        transition: transform 0.3s ease;
+        transition: transform 0.4s ease;
     }
     div[data-testid="stImage"] img:hover {
-        transform: scale(1.03);
+        transform: scale(1.05);
     }
     </style>
 """,
@@ -1013,7 +1009,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก (ปรับขนาดการแสดงผลการ์ดตัวละครให้พอดีตาและเท่ากัน)
+# 🏠 หน้าแรก (แสดงการ์ดตัวละครดีไซน์พรีเมียม สวยงามลงตัว)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1108,7 +1104,10 @@ if not st.session_state.in_chat:
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
                 use_container_width=True,
             )
-          st.markdown(f"### 🌟 {c_name}")
+          st.markdown(
+              f"<div style='text-align: center; font-size: 18px; font-weight: bold; margin: 10px 0;'>🌟 {c_name}</div>",
+              unsafe_allow_html=True,
+          )
           if st.button(
               f"✨ เริ่มแชท",
               key=f"b_{c_name}",
