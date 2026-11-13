@@ -117,7 +117,7 @@ model_name = "gemini-3.5-flash-lite"
 cursor.execute("SELECT name FROM characters")
 all_chars = [row[0] for row in cursor.fetchall()]
 
-# จัดการ Session State สำหรับหน้า Home และตัวละครปัจจุบัน
+# จัดการ Session State
 if "in_chat" not in st.session_state:
   st.session_state.in_chat = False
 
@@ -234,64 +234,80 @@ with st.sidebar:
       else:
         st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
-  # หากอยู่ในหน้าแชท ให้แสดงเมนูจัดการภารกิจและคลังรูปของตัวละครปัจจุบัน
-  if st.session_state.in_chat and st.session_state.current_char:
+  # 👉 นำส่วน "เพิ่มภารกิจ" และ "คลังรูปภาพ" กลับมาไว้รวมกันตรงนี้ ให้อยู่ใต้ฟอร์มสร้าง/เลือกตัวละครหลักเสมอ
+  if all_chars:
     st.divider()
-    with st.expander(
-        f"🎯 จัดการภารกิจ & คลังรูป ({st.session_state.current_char})",
-        expanded=False,
+    st.subheader("👥 เลือกตัวละครหลัก")
+    selected_char = st.selectbox(
+        "จัดการตัวละคร:",
+        all_chars,
+        index=(
+            all_chars.index(st.session_state.current_char)
+            if st.session_state.current_char in all_chars
+            else 0
+        ),
+    )
+
+    if (
+        not st.session_state.current_char
+        or selected_char != st.session_state.current_char
     ):
-      st.markdown("**➕ เพิ่มภารกิจใหม่**")
-      with st.form("add_quest_form", clear_on_submit=True):
-        new_quest_desc = st.text_input(
-            "รายละเอียดภารกิจ:", placeholder="เช่น ชวนไปกินกาแฟ..."
-        )
-        new_quest_pts = st.slider("คะแนนรางวัล:", 5, 50, 15)
-        submit_quest = st.form_submit_button(
-            "➕ เพิ่มภารกิจนี้", use_container_width=True
-        )
-        if submit_quest and new_quest_desc:
-          cursor.execute(
-              "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, ?)",
-              (st.session_state.current_char, new_quest_desc, new_quest_pts),
-          )
-          conn.commit()
-          st.success("เพิ่มภารกิจสำเร็จ!")
-          st.rerun()
+      st.session_state.current_char = selected_char
 
-      st.markdown("---")
-      st.markdown("**🖼️ อัปโหลดรูปเข้าคลัง**")
-      gallery_key = f"gallery_upload_{st.session_state.current_char}"
-      uploaded_gallery_photos = st.file_uploader(
-          "อัปโหลดรูปภาพ (ให้ตัวละครสุ่มส่ง)",
-          type=["png", "jpg", "jpeg", "webp"],
-          accept_multiple_files=True,
-          key=gallery_key,
+    # 🎯 1. ช่องเพิ่มภารกิจ (แสดงตลอดเวลาใน Sidebar)
+    st.markdown(f"### 🎯 เพิ่มภารกิจให้: `{st.session_state.current_char}`")
+    with st.form("add_quest_form_sidebar", clear_on_submit=True):
+      new_quest_desc = st.text_input(
+          "รายละเอียดภารกิจใหม่:", placeholder="เช่น ชวนไปกินกาแฟ..."
       )
-
-      if uploaded_gallery_photos:
+      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15)
+      submit_quest = st.form_submit_button(
+          "➕ เพิ่มภารกิจนี้", use_container_width=True
+      )
+      if submit_quest and new_quest_desc:
         cursor.execute(
-            "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+            "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, ?)",
+            (st.session_state.current_char, new_quest_desc, new_quest_pts),
+        )
+        conn.commit()
+        st.success("เพิ่มภารกิจสำเร็จ!")
+        st.rerun()
+
+    # 🖼️ 2. คลังรูปภาพของตัวละคร (แสดงตลอดเวลาใน Sidebar)
+    st.markdown(f"### 🖼️ คลังรูปของ: `{st.session_state.current_char}`")
+    st.caption("อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)")
+    gallery_key = f"gallery_upload_{st.session_state.current_char}"
+    uploaded_gallery_photos = st.file_uploader(
+        "Upload",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key=gallery_key,
+        label_visibility="collapsed",
+    )
+
+    if uploaded_gallery_photos:
+      cursor.execute(
+          "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      current_db_count = cursor.fetchone()[0]
+
+      if len(uploaded_gallery_photos) != current_db_count:
+        cursor.execute(
+            "DELETE FROM character_photos WHERE char_name = ?",
             (st.session_state.current_char,),
         )
-        current_db_count = cursor.fetchone()[0]
-
-        if len(uploaded_gallery_photos) != current_db_count:
+        for photo in uploaded_gallery_photos:
           cursor.execute(
-              "DELETE FROM character_photos WHERE char_name = ?",
-              (st.session_state.current_char,),
+              "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+              (st.session_state.current_char, photo.getvalue()),
           )
-          for photo in uploaded_gallery_photos:
-            cursor.execute(
-                "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-                (st.session_state.current_char, photo.getvalue()),
-            )
-          conn.commit()
-          st.success("อัปเดตคลังรูปภาพสำเร็จ!")
-          st.rerun()
+        conn.commit()
+        st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+        st.rerun()
 
     st.divider()
-    if st.button("🗑️ ลบตัวละครปัจจุบัน", use_container_width=True):
+    if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
       cursor.execute(
           "DELETE FROM characters WHERE name = ?",
           (st.session_state.current_char,),
@@ -314,7 +330,9 @@ with st.sidebar:
       )
       conn.commit()
       st.session_state.in_chat = False
-      st.session_state.current_char = None
+      cursor.execute("SELECT name FROM characters")
+      remaining = [r[0] for r in cursor.fetchall()]
+      st.session_state.current_char = remaining[0] if remaining else None
       st.rerun()
 
 
@@ -333,7 +351,6 @@ if not st.session_state.in_chat:
         "📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครใหม่ผ่านแถบเมนูด้านซ้ายครับ!"
     )
   else:
-    # แสดงการ์ดตัวละครในรูปแบบ Grid (3 คอลัมน์)
     cols = st.columns(3)
     for idx, c_name in enumerate(all_chars):
       cursor.execute(
@@ -348,7 +365,6 @@ if not st.session_state.in_chat:
       col_target = cols[idx % 3]
       with col_target:
         with st.container(border=True):
-          # แสดงรูปโปรไฟล์ตัวละครในการ์ด
           if c_avatar_blob:
             img = Image.open(io.BytesIO(c_avatar_blob))
             st.image(img, use_container_width=True, height=180)
@@ -366,13 +382,18 @@ if not st.session_state.in_chat:
               else f"**บุคลิก:** {c_pers}"
           )
 
-          # ปุ่มกดเพื่อดูข้อมูลและเริ่มคุย
-          if st.button(f"✨ สำรวจโลกของ {c_name}", key=f"btn_explore_{c_name}", use_container_width=True):
+          if st.button(
+              f"✨ สำรวจโลกของ {c_name}",
+              key=f"btn_explore_{c_name}",
+              use_container_width=True,
+          ):
             st.session_state.selected_preview = c_name
             st.rerun()
 
-    # หน้าต่างพรีวิวข้อมูลตัวละครก่อนเริ่มแชท (Preview Modal / Section)
-    if "selected_preview" in st.session_state and st.session_state.selected_preview:
+    if (
+        "selected_preview" in st.session_state
+        and st.session_state.selected_preview
+    ):
       prev_name = st.session_state.selected_preview
       cursor.execute(
           "SELECT prompt, personality, lore, supporting, first_message, avatar FROM characters WHERE name = ?",
@@ -418,7 +439,6 @@ if not st.session_state.in_chat:
 # 💬 ส่วนห้องแชท (Chat Room)
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
-  # ดึงข้อมูลตัวละครปัจจุบัน
   cursor.execute(
       """
       SELECT prompt, personality, lore, supporting, first_message, avatar 
@@ -439,7 +459,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   if char_avatar_blob:
     char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-  # ดึงสถานะความชอบ
   cursor.execute(
       "SELECT affection_score, relationship_level FROM character_status WHERE char_name = ?",
       (st.session_state.current_char,),
@@ -518,7 +537,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  # --- หน้าจอห้องแชท ---
   col_av, col_title = st.columns([1, 6])
   with col_av:
     if char_avatar_img:
@@ -528,7 +546,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   with col_title:
     st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
 
-  # แผงแสดงหลอดคะแนนความชอบ
   st.markdown(
       f"""
       <div class="affection-box">
@@ -539,7 +556,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       unsafe_allow_html=True,
   )
 
-  # ปุ่มกดดูภารกิจทั้งหมดที่มี
   with st.expander("🎯 เปิดดูภารกิจทั้งหมด (Quest Log)", expanded=False):
     cursor.execute(
         "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
@@ -562,7 +578,6 @@ if st.session_state.in_chat and st.session_state.current_char:
 
   st.divider()
 
-  # แสดงประวัติแชท
   for message in current_messages:
     if message["role"] == "user":
       with st.chat_message("user", avatar="👤"):
@@ -574,7 +589,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         if message["image"]:
           st.image(message["image"], width=280)
 
-  # ช่องพิมพ์ข้อความ
   if user_input := st.chat_input(
       f"ส่งข้อความหา {st.session_state.current_char}..."
   ):
@@ -664,14 +678,13 @@ if st.session_state.in_chat and st.session_state.current_char:
           cursor.execute(
               """
               UPDATE character_status 
-              SET affection_score = ?, relationship_level = ? 
+              -SET affection_score = ?, relationship_level = ? 
               WHERE char_name = ?
           """,
               (updated_score, new_lvl, st.session_state.current_char),
           )
           conn.commit()
 
-          # สุ่มรูปจากคลัง (30%)
           cursor.execute(
               "SELECT photo FROM character_photos WHERE char_name = ?",
               (st.session_state.current_char,),
