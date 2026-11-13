@@ -59,7 +59,6 @@ def init_db():
         )
     """)
 
-  # ตรวจสอบว่ามีคอลัมน์ is_admin หรือยัง (ป้องกัน Error กรณีฐานข้อมูลเก่า)
   cursor.execute("PRAGMA table_info(users)")
   columns = [col[1] for col in cursor.fetchall()]
   if "is_admin" not in columns:
@@ -197,7 +196,6 @@ if not st.session_state.logged_in:
           )
           row = cursor.fetchone()
           if row and row[0] == hash_password(l_pass):
-            # บัญชีชื่อ admin หรือถูกตั้งค่าเป็น 1 ให้เป็น admin เสมอ
             admin_status = 1 if l_user.lower() == "admin" else row[1]
 
             st.session_state.logged_in = True
@@ -224,7 +222,6 @@ if not st.session_state.logged_in:
           if cursor.fetchone():
             st.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
           else:
-            # ถ้าสมัครชื่อ admin หรือเป็นคนแรกในระบบ ให้เป็น Admin อัตโนมัติ
             cursor.execute("SELECT COUNT(*) FROM users")
             user_count = cursor.fetchone()[0]
             assigned_admin = (
@@ -254,7 +251,6 @@ if not st.session_state.logged_in:
 # 🌟 ระบบหลักหลังเข้าสู่ระบบแล้ว
 # ==========================================
 current_user = st.session_state.username
-# ให้ชื่อ admin เป็น admin เสมอ
 if current_user.lower() == "admin":
   st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
@@ -302,7 +298,7 @@ with st.sidebar:
 
   # 🛠️ เมนูจัดการระบบ (จำกัดสิทธิ์เฉพาะ Admin เท่านั้น)
   if is_current_admin:
-    st.markdown("### 🛠️ จัดการระบบตัวละคร (Admin Only)")
+    st.markdown("### 🛠️ จัดการระบบ (Admin Only)")
     sidebar_action = st.selectbox(
         "เลือกการจัดการ:",
         [
@@ -311,13 +307,17 @@ with st.sidebar:
             "👥 จัดการตัวละครเสริม",
             "🎯 จัดการภารกิจ (Quest Log)",
             "🖼️ จัดการคลังรูปภาพ",
+            "👥 จัดการผู้ใช้งานระบบ",
         ],
     )
   else:
     st.markdown("### 📌 เมนูผู้ใช้งาน")
     sidebar_action = "เลือกตัวละคร"
 
-  if all_chars and sidebar_action != "➕ สร้างตัวละครหลักใหม่":
+  if all_chars and sidebar_action not in [
+      "➕ สร้างตัวละครหลักใหม่",
+      "👥 จัดการผู้ใช้งานระบบ",
+  ]:
     st.divider()
     selected_char = st.selectbox(
         "เลือกตัวละครหลัก:",
@@ -748,6 +748,69 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีรูปภาพในคลัง")
 
+  # 6. จัดการผู้ใช้งานระบบ (Admin Only)
+  elif is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
+    st.markdown("### 👥 รายชื่อผู้ใช้งานทั้งหมด")
+    cursor.execute("SELECT username, is_admin FROM users")
+    users_list = cursor.fetchall()
+
+    if users_list:
+      for u_name, u_admin in users_list:
+        with st.container(border=True):
+          role_label = "🛡️ Admin" : u_admin == 1 else "👤 User"
+          st.markdown(f"**ยูสเซอร์:** `{u_name}` ({role_label})")
+
+          # ฟอร์มแก้ไขรหัสผ่านและลบบัญชี
+          with st.form(f"manage_user_{u_name}"):
+            new_p = st.text_input(
+                "เปลี่ยนรหัสผ่านใหม่ (ถ้าต้องการ):",
+                type="password",
+                key=f"np_{u_name}",
+            )
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+              btn_save_p = st.form_submit_button(
+                  "💾 บันทึกรหัส", use_container_width=True
+              )
+            with col_u2:
+              btn_del_u = st.form_submit_button(
+                  "🗑️ ลบบัญชี", use_container_width=True
+              )
+
+            if btn_save_p:
+              if new_p:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (hash_password(new_p), u_name),
+                )
+                conn.commit()
+                st.success(f"เปลี่ยนรหัสผ่านของ '{u_name}' สำเร็จ!")
+                st.rerun()
+              else:
+                st.warning("กรุณากรอกรหัสผ่านใหม่")
+
+            if btn_del_u:
+              if u_name.lower() == "admin" and current_user.lower() == u_name:
+                st.error("ไม่สามารถลบบัญชี Admin หลักของตัวเองได้")
+              else:
+                cursor.execute(
+                    "DELETE FROM users WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM messages WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM character_status WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM user_quests WHERE username = ?", (u_name,)
+                )
+                conn.commit()
+                st.success(f"ลบบัญชี '{u_name}' สำเร็จ!")
+                st.rerun()
+    else:
+      st.info("ยังไม่มีผู้ใช้งานอื่นในระบบ")
+
   if not all_chars and (
       not is_current_admin or sidebar_action != "➕ สร้างตัวละครหลักใหม่"
   ):
@@ -758,6 +821,73 @@ with st.sidebar:
 # 🏠 ส่วนแสดงผลหน้าแรก (Discovery / Home Hub)
 # ==========================================
 if not st.session_state.in_chat:
+  # ถ้าแอดมินเลือกเมนูปัดจัดการยูสเซอร์ใน sidebar ให้แสดงหน้าจัดการแทนหน้าแรกปกติ
+  if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
+    st.title("👥 ระบบจัดการผู้ใช้งานทั้งหมด")
+    st.caption(
+        "ดูรายชื่อ แก้ไขรหัสผ่าน หรือลบบัญชีผู้ใช้งานที่สมัครเข้ามาในระบบได้ที่นี่"
+    )
+    st.divider()
+
+    cursor.execute("SELECT username, is_admin FROM users")
+    all_users = cursor.fetchall()
+
+    if all_users:
+      for u_name, u_admin in all_users:
+        with st.container(border=True):
+          role_label = "🛡️ ผู้ดูแลระบบ (Admin)" if u_admin == 1 else "👤 ผู้ใช้งานทั่วไป (User)"
+          st.markdown(f"### ชื่อผู้ใช้: `{u_name}` — *({role_label})*")
+
+          with st.form(f"main_manage_user_{u_name}"):
+            m_new_pass = st.text_input(
+                "ตั้งรหัสผ่านใหม่:", type="password", key=f"mp_{u_name}"
+            )
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+              m_save = st.form_submit_button(
+                  "💾 อัปเดตรหัสผ่าน", use_container_width=True
+              )
+            with col_m2:
+              m_del = st.form_submit_button(
+                  "🗑️ ลบบัญชีนี้", use_container_width=True
+              )
+
+            if m_save:
+              if m_new_pass:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (hash_password(m_new_pass), u_name),
+                )
+                conn.commit()
+                st.success(f"อัปเดตรหัสผ่านของ '{u_name}' สำเร็จ!")
+                st.rerun()
+              else:
+                st.warning("กรุณากรอกรหัสผ่านใหม่")
+
+            if m_del:
+              if u_name.lower() == "admin":
+                st.error("ไม่อนุญาตให้ลบบัญชี Admin หลัก")
+              else:
+                cursor.execute(
+                    "DELETE FROM users WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM messages WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM character_status WHERE username = ?", (u_name,)
+                )
+                cursor.execute(
+                    "DELETE FROM user_quests WHERE username = ?", (u_name,)
+                )
+                conn.commit()
+                st.success(f"ลบบัญชี '{u_name}' สำเร็จ!")
+                st.rerun()
+    else:
+      st.info("ยังไม่มีผู้ใช้งานในระบบ")
+
+    st.stop()
+
   st.title("🔥 จักรวาลยอดนิยม & ตัวละครทั้งหมด")
   st.caption(
       "เลือกตัวละครที่คุณสนใจเพื่อดูข้อมูลพื้นหลังและเริ่มต้นบทสนทนาได้เลยครับ"
@@ -1194,7 +1324,7 @@ if st.session_state.in_chat and st.session_state.current_char:
           cursor.execute(
               """
               UPDATE character_status 
-              `SET affection_score = ?, relationship_level = ? 
+              SET affection_score = ?, relationship_level = ? 
               WHERE username = ? AND char_name = ?
           """,
               (
