@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม (ปรับรูปให้เต็มกรอบสวยงามลงตัว)
+# 🎨 ดีไซน์ CSS ดั้งเดิม
 st.markdown(
     """
     <style>
@@ -38,24 +38,6 @@ st.markdown(
         font-size: 12px;
         color: #ff99cc;
         font-weight: bold;
-    }
-
-    /* 🖼️ บังคับให้รูปภาพขยายเต็มกรอบการ์ดพอดี 100% ทุกรูป */
-    div[data-testid="stImage"] {
-        width: 100% !important;
-        border-radius: 16px;
-        overflow: hidden;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    }
-    div[data-testid="stImage"] img {
-        height: 280px !important;
-        width: 100% !important;
-        object-fit: cover !important;
-        border-radius: 16px !important;
-        transition: transform 0.4s ease;
-    }
-    div[data-testid="stImage"] img:hover {
-        transform: scale(1.03);
     }
     </style>
 """,
@@ -990,7 +972,7 @@ with st.sidebar:
                     (u_name_db,),
                 )
                 cursor.execute(
-                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,),
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
                 )
                 conn.commit()
                 st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
@@ -1010,7 +992,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก (แสดงการ์ดตัวละครดีไซน์พรีเมียม รูปเต็มกรอบ)
+# 🏠 หน้าแรก (ดีไซน์ดั้งเดิม ขนาดใหญ่เต็มตา)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1090,13 +1072,13 @@ if not st.session_state.in_chat:
   if not all_chars:
     st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
   else:
-    cols = st.columns(4)
+    cols = st.columns(3)
     for idx, c_name in enumerate(all_chars):
       cursor.execute(
           "SELECT personality, avatar FROM characters WHERE name = ?", (c_name,)
       )
       c_data = cursor.fetchone()
-      with cols[idx % 4]:
+      with cols[idx % 3]:
         with st.container(border=True):
           if c_data and c_data[1]:
             st.image(Image.open(io.BytesIO(c_data[1])), use_container_width=True)
@@ -1105,12 +1087,9 @@ if not st.session_state.in_chat:
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
                 use_container_width=True,
             )
-          st.markdown(
-              f"<div style='text-align: center; font-size: 18px; font-weight: bold; margin: 10px 0;'>🌟 {c_name}</div>",
-              unsafe_allow_html=True,
-          )
+          st.markdown(f"### 🌟 {c_name}")
           if st.button(
-              f"✨ เริ่มแชท",
+              f"✨ เริ่มแชทกับ {c_name}",
               key=f"b_{c_name}",
               use_container_width=True,
           ):
