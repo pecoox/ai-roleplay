@@ -141,7 +141,6 @@ def init_db():
         )
     """)
 
-  # ตรวจสอบคอลัมน์ photo_hash ป้องกันรูปซ้ำ
   cursor.execute("PRAGMA table_info(character_photos)")
   p_cols = [col[1] for col in cursor.fetchall()]
   if "photo_hash" not in p_cols:
@@ -441,7 +440,8 @@ with st.sidebar:
     sidebar_action = st.selectbox(
         "เลือกการจัดการ:",
         [
-            "➕ สร้างตัวละครหลักใหม่",
+            "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+            "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
             "👥 จัดการตัวละครเสริม",
             "🎯 จัดการภารกิจ (Quest Log)",
@@ -453,7 +453,7 @@ with st.sidebar:
     sidebar_action = "เลือกตัวละคร"
 
   # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
-  if all_chars:
+  if all_chars and sidebar_action != "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)":
     st.divider()
     selected_char = st.selectbox(
         "เลือกตัวละครหลัก:",
@@ -475,9 +475,113 @@ with st.sidebar:
   st.divider()
   active_char = st.session_state.current_char
 
-  # 1. สร้างตัวละครหลักใหม่ (Admin Only)
-  if is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่":
-    st.markdown("### 📌 สร้างตัวละครหลัก")
+  # ✨ 1.5 ฟีเจอร์ใหม่: สร้างตัวละครหลักด้วย AI อัตโนมัติจากชื่อดารา/ตัวละคร
+  if is_current_admin and sidebar_action == "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)":
+    st.markdown("### ✨ สร้างตัวละครหลักด้วย AI")
+    st.caption(
+        "กรอกชื่อดาราหรือตัวละครที่ต้องการ แล้วให้ AI จัดการสร้างข้อมูลทั้งหมดให้ทันที!"
+    )
+
+    with st.form("ai_gen_char_form"):
+      ai_target_name = st.text_input(
+          "ชื่อดารา หรือ ตัวละครหลัก:",
+          placeholder="เช่น ทอม Hiddleston, โรเบิร์ต พัททินสัน...",
+      )
+      ai_submit_btn = st.form_submit_button(
+          "🚀 ให้ AI สร้างตัวละครนี้แบบครบชุด", use_container_width=True
+      )
+
+      if ai_submit_btn and ai_target_name:
+        with st.spinner(
+            f"กำลังให้ AI สร้างข้อมูลทั้งหมดของ '{ai_target_name}'..."
+        ):
+          try:
+            prompt_gen = (
+                f"คุณคือผู้เชี่ยวชาญการสร้างข้อมูลตัวละครสำหรับ Roleplay กรุณาสร้างข้อมูลแบบละเอียดสำหรับ '{ai_target_name}' ในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+                "{\n"
+                f'  "name": "{ai_target_name}",\n'
+                '  "prompt": "คาแรคเตอร์หลักและบทบาทของตัวละครนี้",\n'
+                '  "personality": "บุคลิกและนิสัยใจคอ",\n'
+                '  "lore": "เรื่องราวพื้นหลังและความสัมพันธ์",\n'
+                '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2", "ข้อความเปิดตัวแบบที่ 3"],\n'
+                '  "sub_name": "ชื่อตัวละครเสริมรอบตัว 1 คน",\n'
+                '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
+                '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
+                '  "quest_desc": "ภารกิจเริ่มต้นชวนทำกิจกรรมร่วมกัน"\n'
+                "}"
+            )
+            response = client.models.generate_content(
+                model=model_name, contents=prompt_gen
+            )
+            raw_res = response.text.strip()
+
+            if "{" in raw_res and "}" in raw_res:
+              json_text = raw_res[
+                  raw_res.find("{") : raw_res.rfind("}") + 1
+              ]
+              char_info = json.loads(json_text)
+
+              c_name = char_info.get("name", ai_target_name)
+              c_prompt = char_info.get("prompt", "คุณคือ...")
+              c_pers = char_info.get("personality", "เงียบขรึม...")
+              c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
+              f_msgs = char_info.get(
+                  "first_messages",
+                  [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
+              )
+              s_name = char_info.get("sub_name", "ผู้จัดการส่วนตัว")
+              s_prompt = char_info.get("sub_prompt", "คอยดูแลตารางงาน")
+              s_pers = char_info.get("sub_personality", "เข้มงวด รักความสะอาด")
+              q_desc = char_info.get(
+                  "quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม"
+              )
+
+              # บันทึกตัวละครหลัก
+              cursor.execute(
+                  "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                  (
+                      c_name,
+                      c_prompt,
+                      c_pers,
+                      c_lore,
+                      json.dumps(f_msgs, ensure_ascii=False),
+                      None,
+                  ),
+              )
+
+              # บันทึกตัวละครเสริม
+              cursor.execute(
+                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
+                  (
+                      c_name,
+                      s_name,
+                      s_prompt,
+                      s_pers,
+                      "เป็นบุคคลใกล้ชิดในวงสังคม",
+                  ),
+              )
+
+              # สร้างภารกิจเริ่มต้น
+              cursor.execute(
+                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                  (c_name, q_desc, 20),
+              )
+
+              conn.commit()
+              st.session_state.current_char = c_name
+              st.session_state.in_chat = True
+              st.success(
+                  f"🎉 สร้างตัวละคร '{c_name' พร้อมใช้งานสำเร็จเรียบร้อย!"
+              )
+              st.rerun()
+            else:
+              st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI กรุณาลองใหม่อีกครั้ง")
+          except Exception as e:
+            st.error(f"เกิดข้อผิดพลาด: {e}")
+
+  # 1. สร้างตัวละครหลักใหม่ (Manual)
+  elif is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่ (Manual)":
+    st.markdown("### 📌 สร้างตัวละครหลัก (แบบกำหนดเอง)")
     with st.form("create_char_form"):
       new_name = st.text_input("ชื่อตัวละครหลัก:")
       new_prompt = st.text_area("คาแรคเตอร์หลัก (Prompt):", height=60)
@@ -739,7 +843,7 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีภารกิจในระบบ")
 
-  # 5. จัดการคลังรูปภาพ (Admin Only) - ป้องกันการอัปโหลดซ้ำวนลูป
+  # 5. จัดการคลังรูปภาพ (Admin Only)
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
@@ -773,7 +877,6 @@ with st.sidebar:
         key=f"gallery_upload_{active_char}",
     )
 
-    # ตรวจสอบและบันทึกเฉพาะรูปใหม่ที่ไม่ซ้ำในฐานข้อมูล
     if uploaded_gallery_photos:
       new_uploaded = False
       for photo in uploaded_gallery_photos:
@@ -881,9 +984,14 @@ with st.sidebar:
       st.info("ยังไม่มีผู้ใช้งานอื่นในระบบ")
 
   if not all_chars and (
-      not is_current_admin or sidebar_action != "➕ สร้างตัวละครหลักใหม่"
+      not is_current_admin
+      and sidebar_action
+      not in [
+          "➕ สร้างตัวละครหลักใหม่ (Manual)",
+          "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+      ]
   ):
-    st.info("ยังไม่มีตัวละครหลักในระบบ กรุณาให้ Admin สร้างตัวละครก่อนครับ")
+    st.info("ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
 
 
 # ==========================================
