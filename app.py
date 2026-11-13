@@ -183,6 +183,24 @@ def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
 
+# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์อัตโนมัติตามแต้มสะสม (ระบบเลเวล)
+def get_relationship_level(score):
+  if score < 50:
+    return "คนแปลกหน้า"
+  elif score < 150:
+    return "คนรู้จัก"
+  elif score < 300:
+    return "เพื่อนใหม่"
+  elif score < 500:
+    return "เพื่อนสนิท"
+  elif score < 800:
+    return "คนรู้ใจ"
+  elif score < 1200:
+    return "คู่แท้ / คนสำคัญ"
+  else:
+    return "ตำนานแห่งความผูกพัน 💖"
+
+
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 if "username" not in st.session_state:
@@ -811,7 +829,7 @@ with st.sidebar:
     st.markdown(f"### 🎯 จัดการภารกิจ: {active_char}")
     with st.form(f"add_quest_form_{active_char}", clear_on_submit=True):
       new_quest_desc = st.text_input("รายละเอียดภารกิจใหม่:")
-      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15, key=f"q_pts_{active_char}")
+      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 100, 15, key=f"q_pts_{active_char}")
       if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and new_quest_desc:
         cursor.execute(
             "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
@@ -1149,12 +1167,12 @@ if st.session_state.in_chat and st.session_state.current_char:
 - ตัวละครเสริม: {supporting_text}
 
 [ผู้สนทนา]: ชื่อ {u_name} | ประวัติ: {u_persona} | สรรพนามพูด: {u_pspeak} | สรรพนามบรรยาย: {u_pdesc} | เรียกผู้ใช้: {u_cspeak}
-- ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบ: {current_affection}/100)
+- ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
 [กฎการตอบ]:
 1. ตอบสไตล์นิยายบรรยาย ใส่ท่าทางความรู้สึกด้วยเครื่องหมาย *...* สวมบทบาท 100%
 2. บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ:
-{{"score_change": [ตัวเลขเช่น 5 หรือ -2], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}}
+{{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}}
 """
 
 
@@ -1245,7 +1263,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         col_badge, col_pop = st.columns([4, 1.2])
         with col_badge:
           st.markdown(
-              f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
+              f'<div class="affection-badge">💖 {current_rel_level} | คะแนนสะสม: {current_affection} แต้ม</div>',
               unsafe_allow_html=True,
           )
         with col_pop:
@@ -1305,10 +1323,11 @@ if st.session_state.in_chat and st.session_state.current_char:
       try:
         score_change = int(user_input.replace("/+ชอบ ", "").strip())
         bot_response = (
-            f"*(ระบบทดสอบ: เพิ่มแต้มความชอบให้ {score_change} คะแนนเรียบร้อย)*"
+            f"*(ระบบทดสอบ: เพิ่มแต้มความชอบสะสมให้ {score_change}"
+            " คะแนนเรียบร้อย)*"
         )
       except Exception:
-        bot_response = "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ชอบ 20`)*"
+        bot_response = "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ชอบ 50`)*"
     elif user_input.startswith("/+ผ่านภารกิจ "):
       is_cheat = True
       try:
@@ -1338,11 +1357,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       if is_cheat:
         time.sleep(0.5)
         message_placeholder.markdown(bot_response)
-        eval_data = {
-            "score_change": score_change,
-            "new_level": current_rel_level,
-            "quest_update": completed_q_id,
-        }
+        eval_data = {"score_change": score_change, "quest_update": completed_q_id}
       else:
         message_placeholder.markdown("กำลังพิมพ์...")
 
@@ -1378,18 +1393,10 @@ if st.session_state.in_chat and st.session_state.current_char:
               try:
                 eval_data = json.loads("{" + parts[1])
               except Exception:
-                eval_data = {
-                    "score_change": 2,
-                    "new_level": current_rel_level,
-                    "quest_update": None,
-                }
+                eval_data = {"score_change": 2, "quest_update": None}
             else:
               bot_response = raw_text
-              eval_data = {
-                  "score_change": 2,
-                  "new_level": current_rel_level,
-                  "quest_update": None,
-              }
+              eval_data = {"score_change": 2, "quest_update": None}
             break
 
           except Exception as e:
@@ -1402,16 +1409,11 @@ if st.session_state.in_chat and st.session_state.current_char:
               bot_response = (
                   f"ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ: `{str(e)}`"
               )
-              eval_data = {
-                  "score_change": 0,
-                  "new_level": current_rel_level,
-                  "quest_update": None,
-              }
+              eval_data = {"score_change": 0, "quest_update": None}
         message_placeholder.markdown(bot_response)
 
       if bot_response:
         score_change = eval_data.get("score_change", score_change)
-        new_lvl = eval_data.get("new_level", current_rel_level)
         completed_q_id = eval_data.get("quest_update", completed_q_id)
 
         quest_bonus = 0
@@ -1434,9 +1436,10 @@ if st.session_state.in_chat and st.session_state.current_char:
                   (current_user, completed_q_id),
               )
 
-        updated_score = max(
-            0, min(100, current_affection + score_change + quest_bonus)
-        )
+        # 🚀 บวกแต้มสะสมแบบไม่จำกัด (ไม่มีล็อก 100)
+        updated_score = max(0, current_affection + score_change + quest_bonus)
+        new_lvl = get_relationship_level(updated_score)
+
         cursor.execute(
             "UPDATE character_status SET affection_score = ?, relationship_level = ? WHERE username = ? AND char_name = ?",
             (
