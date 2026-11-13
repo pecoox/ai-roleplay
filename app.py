@@ -7,12 +7,12 @@ import io
 import random
 
 st.set_page_config(
-    page_title="AI Roleplay - Character Studio",
-    page_icon="🎨",
+    page_title="AI Roleplay - Character Gallery",
+    page_icon="🖼️",
     layout="centered",
 )
 
-# 🎨 ดีไซน์ CSS ปรับแต่งแถบ Sidebar ให้เลื่อนดูง่ายและกระชับขึ้น
+# 🎨 ดีไซน์ CSS พรีเมียม
 st.markdown(
     """
     <style>
@@ -25,20 +25,13 @@ st.markdown(
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* จัดแต่งกล่องข้อความใน Sidebar ให้กะทัดรัด */
-    [data-testid="stSidebar"] .stTextInput input, [data-testid="stSidebar"] .stTextArea textarea {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        font-size: 14px;
-    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite (เพิ่มตารางเก็บคลังรูปภาพของตัวละคร)
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -50,13 +43,21 @@ def init_db():
             avatar BLOB
         )
     """)
+  # ตารางเก็บคลังรูปภาพประจำตัวละคร
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS character_photos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            char_name TEXT,
+            photo BLOB
+        )
+    """)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             char_name TEXT,
             role TEXT,
             content TEXT,
-            image_url TEXT
+            image_blob BLOB
         )
     """)
   conn.commit()
@@ -114,7 +115,7 @@ with st.sidebar:
   st.divider()
   st.markdown("### 🛠️ สร้างตัวละครใหม่")
 
-  with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=True):
+  with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=False):
     new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น มดอ้วน...")
     new_prompt = st.text_area(
         "คาแรคเตอร์สั้นๆ:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=60
@@ -168,7 +169,35 @@ with st.sidebar:
     st.session_state.current_char = selected_char
     st.rerun()
 
+  # 🖼️ เพิ่มเมนูจัดการ "คลังรูปภาพของตัวละครนี้" (เพื่อให้ตัวละครมีรูปส่งให้ดู)
+  st.divider()
+  st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
+  uploaded_gallery_photos = st.file_uploader(
+      "อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)",
+      type=["png", "jpg", "jpeg"],
+      accept_multiple_files=True,
+      key="gallery_upload",
+  )
+  if uploaded_gallery_photos:
+    for photo in uploaded_gallery_photos:
+      cursor.execute(
+          "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+          (st.session_state.current_char, photo.getvalue()),
+      )
+    conn.commit()
+    st.success("เพิ่มรูปเข้าคลังสำเร็จ!")
+    st.rerun()
+
+  # แสดงจำนวนรูปในคลังปัจจุบัน
+  cursor.execute(
+      "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+      (st.session_state.current_char,),
+  )
+  photo_count = cursor.fetchone()[0]
+  st.caption(f"📁 รูปในคลังตอนนี้: {photo_count} รูป")
+
   if len(char_list) > 1:
+    st.divider()
     if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
       cursor.execute(
           "DELETE FROM characters WHERE name = ?",
@@ -178,12 +207,14 @@ with st.sidebar:
           "DELETE FROM messages WHERE char_name = ?",
           (st.session_state.current_char,),
       )
+      cursor.execute(
+          "DELETE FROM character_photos WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
       conn.commit()
       cursor.execute("SELECT name FROM characters LIMIT 1")
       st.session_state.current_char = cursor.fetchone()[0]
       st.rerun()
-  else:
-    st.caption("ℹ️ ต้องมีตัวละครอย่างน้อย 1 ตัว")
 
 # ดึงข้อมูลตัวละครปัจจุบัน
 cursor.execute(
@@ -199,7 +230,6 @@ char_avatar_img = None
 if char_avatar_blob:
   char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-# รวม Prompt และ Lore
 full_system_prompt = f"{base_prompt}\n\n[ข้อมูลและประวัติเชิงลึกของตัวละคร (Lore)]:\n{char_lore if char_lore else 'ไม่มีข้อมูลพิเศษ'}"
 
 if "นิยาย" in chat_mode:
@@ -220,15 +250,19 @@ else:
   )
   temp_val = 0.9
 
-# ดึงข้อความแชท
+# ดึงข้อความแชทพร้อมรูปภาพที่บันทึกไว้
 cursor.execute(
-    "SELECT role, content, image_url FROM messages WHERE char_name = ?",
+    "SELECT role, content, image_blob FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
 )
-current_messages = [
-    {"role": row[0], "content": row[1], "image_url": row[2]}
-    for row in cursor.fetchall()
-]
+current_messages = []
+for row in cursor.fetchall():
+  img_obj = None
+  if row[2]:
+    img_obj = Image.open(io.BytesIO(row[2]))
+  current_messages.append(
+      {"role": row[0], "content": row[1], "image": img_obj}
+  )
 
 # แสดงหัวข้อและรูปโปรไฟล์ตัวละคร
 col_av, col_title = st.columns([1, 6])
@@ -250,15 +284,15 @@ for message in current_messages:
     avatar_icon = char_avatar_img if char_avatar_img else "✨"
     with st.chat_message("assistant", avatar=avatar_icon):
       st.markdown(message["content"])
-      if message["image_url"]:
-        st.image(message["image_url"], width=280)
+      if message["image"]:
+        st.image(message["image"], width=280)
 
 # ช่องพิมพ์ข้อความ
 if user_input := st.chat_input(
     f"ส่งข้อความหา {st.session_state.current_char}..."
 ):
   cursor.execute(
-      "INSERT INTO messages (char_name, role, content, image_url) VALUES (?, ?,"
+      "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?,"
       " ?, ?)",
       (st.session_state.current_char, "user", user_input, None),
   )
@@ -273,7 +307,7 @@ if user_input := st.chat_input(
     message_placeholder.markdown("กำลังพิมพ์...")
 
     bot_response = None
-    attached_image = None
+    attached_photo_bytes = None
     max_retries = 3
 
     for attempt in range(max_retries):
@@ -297,15 +331,15 @@ if user_input := st.chat_input(
         response = chat.send_message(user_input)
         bot_response = response.text
 
-        # สุ่มส่งรูปภาพประกอบ (ประมาณ 25%)
-        if random.random() < 0.25:
-          sample_images = [
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-              "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500",
-              "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500",
-              "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500",
-          ]
-          attached_image = random.choice(sample_images)
+        # 📸 สุ่มดึงรูปจากคลังรูปภาพของตัวละครนี้มาส่ง (โอกาส 30% ถ้ามีรูปในคลัง)
+        cursor.execute(
+            "SELECT photo FROM character_photos WHERE char_name = ?",
+            (st.session_state.current_char,),
+        )
+        photos = cursor.fetchall()
+        if photos and random.random() < 0.30:
+          selected_photo_row = random.choice(photos)
+          attached_photo_bytes = selected_photo_row[0]
 
         break
 
@@ -328,17 +362,19 @@ if user_input := st.chat_input(
 
     if bot_response:
       message_placeholder.markdown(bot_response)
-      if attached_image:
-        st.image(attached_image, width=280)
+      display_img = None
+      if attached_photo_bytes:
+        display_img = Image.open(io.BytesIO(attached_photo_bytes))
+        st.image(display_img, width=280)
 
       cursor.execute(
-          "INSERT INTO messages (char_name, role, content, image_url) VALUES (?,"
+          "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?,"
           " ?, ?, ?)",
           (
               st.session_state.current_char,
               "assistant",
               bot_response,
-              attached_image,
+              attached_photo_bytes,
           ),
       )
       conn.commit()
