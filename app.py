@@ -197,7 +197,6 @@ def get_relationship_level(score):
       (800, "ความผูกพันลึกซึ้ง"),
       (900, "รักแท้ไร้ขีดจำกัด"),
   ]
-  # หารด้วย 100 เพื่อเทียบช่วงเลเวล (เช่น 0-99 เลเวล 0, 100-199 เลเวล 1)
   idx = min(score // 100, len(levels) - 1)
   return levels[idx][1]
 
@@ -1233,14 +1232,27 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
   with col_reset:
     if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
+      # ลบข้อความแชท
       cursor.execute(
           "DELETE FROM messages WHERE username = ? AND char_name = ?",
           (current_user, st.session_state.current_char),
       )
+      # รีเซ็ตแต้มความชอบ
       cursor.execute(
           "UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = ? AND char_name = ?",
           (current_user, st.session_state.current_char),
       )
+      # 🛠️ รีเซ็ตสถานะภารกิจทั้งหมดของตัวละครนี้ให้กลับเป็นยังไม่ทำ
+      cursor.execute(
+          """
+          DELETE FROM user_quests 
+          WHERE username = ? AND quest_id IN (
+              SELECT id FROM quests WHERE char_name = ?
+          )
+      """,
+          (current_user, st.session_state.current_char),
+      )
+
       new_m = get_random_first_msg(
           char_first_msg_raw, st.session_state.current_char
       )
