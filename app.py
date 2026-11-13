@@ -2,11 +2,39 @@ from google import genai
 import streamlit as st
 import time
 
+# ตั้งค่าหน้าเว็บให้กว้างขึ้น (wide layout) เพื่อความสวยงามทันสมัย
 st.set_page_config(
-    page_title="AI Novel & Roleplay", page_icon="📖", layout="centered"
+    page_title="AI Roleplay - Modern UI", page_icon="✨", layout="centered"
 )
 
-st.title("📖 AI Roleplay & Novel Style: สไตล์นิยายบรรยาย")
+# 🎨 ตกแต่ง CSS เพิ่มความโค้งมนและหน้าตาให้โมเดิร์นเหมือนแอปแชทจริง
+st.markdown(
+    """
+    <style>
+    /* ปรับแต่งกล่องแชทข้อความของผู้ใช้ */
+    .stChatMessage[data-testid="stChatMessage"]:nth-child(odd) {
+        background-color: #f0f2f6;
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    /* ปรับแต่งกล่องแชทข้อความของ AI */
+    .stChatMessage[data-testid="stChatMessage"]:nth-child(even) {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 15px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    /* ซ่อน Header และ Footer มาตรฐานของ Streamlit ให้ดูคลีนขึ้น */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.title("✨ AI Roleplay: Modern Chat")
 
 # ดึง API Key
 try:
@@ -38,22 +66,16 @@ if "current_char" not in st.session_state:
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
-  st.header("⚙️ ตั้งค่าสไตล์การคุย")
-  # เลือกโหมดการตอบ
+  st.header("⚙️ ตั้งค่าและตัวละคร")
   chat_mode = st.radio(
-      "เลือกรูปแบบการตอบ:",
-      ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว & ชวนคุยต่อเนื่อง"],
+      "รูปแบบการคุย:", ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว"]
   )
 
   st.divider()
-  st.header("✨ สร้างตัวละครใหม่")
-  new_name = st.text_input(
-      "ชื่อตัวละคร:", placeholder="เช่น พระเอกนิยาย, แฟนหนุ่ม..."
-  )
+  st.subheader("✨ สร้างตัวละครใหม่")
+  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, ตัวละครลับ...")
   new_prompt = st.text_area(
-      "กำหนดคาแรคเตอร์:",
-      placeholder="คุณคือมาเฟียหนุ่มผู้เย็นชาแต่คลั่งรัก...",
-      height=100,
+      "คาแรคเตอร์:", placeholder="คุณคือเพื่อนสนิทขี้เล่น...", height=90
   )
 
   if st.button("➕ สร้างตัวละคร"):
@@ -64,18 +86,18 @@ with st.sidebar:
             "messages": [],
         }
         st.session_state.current_char = new_name
-        st.success(f"สร้างตัวละคร '{new_name}' สำเร็จ!")
+        st.success(f"สร้าง '{new_name}' สำเร็จ!")
         st.rerun()
       else:
-        st.warning("ชื่อตัวละครนี้มีอยู่แล้ว")
+        st.warning("ชื่อนี้มีอยู่แล้ว")
     else:
-      st.warning("กรุณากรอกข้อมูลให้ครบ")
+      st.warning("กรอกข้อมูลให้ครบถ้วน")
 
   st.divider()
-  st.header("👥 เลือกตัวละคร")
+  st.subheader("👥 เลือกตัวละคร")
   char_list = list(st.session_state.characters.keys())
   selected_char = st.selectbox(
-      "เลือกตัวละคร:",
+      "เลือกคุยกับ:",
       char_list,
       index=char_list.index(st.session_state.current_char),
   )
@@ -96,47 +118,51 @@ with st.sidebar:
 active_char_data = st.session_state.characters[st.session_state.current_char]
 base_prompt = active_char_data["prompt"]
 
-# 📌 ปรับแต่งคำสั่งตามโหมดที่เลือก
+# กำหนด System Instruction ตามโหมด
 if "นิยาย" in chat_mode:
   roleplay_instruction = (
-      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดนิยายบรรยาย]:\n"
-      "1. เขียนตอบให้มีความยาวมากขึ้นในรูปแบบ 'นิยายแชท/บทบรรยาย' (Novel"
-      " Style) มีการบรรยายท่าทาง สีหน้า แววตา หรือบรรยากาศรอบตัวประกอบด้วย"
-      " (ใช้เครื่องหมายดอกจัน * หรือวงเล็บ เพื่อสื่อถึงการกระทำ เช่น *เขยิบเข้าไปใกล้*)"
-      "\n2. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n3."
-      " เมื่อบรรยายจบเรื่องราวในแต่ละตอน ให้ 'ตั้งคำถามหรือเปิดฉากสนทนา' เพื่อโยนบทกลับมาให้ผู้ใช้เป็นคนตัดสินใจเลือกตอบหรือกระทำต่อ"
-      " เพื่อดำเนินเรื่องราวร่วมกันต่อไป"
+      f"{base_prompt}\n\n[กฎการตอบ]:\n"
+      "1. เขียนตอบสไตล์นิยายบรรยาย มีท่าทาง สีหน้า ความรู้สึก (ใช้เครื่องหมาย *"
+      " ครอบการกระทำ)\n"
+      "2. สวมบทบาท 100% ห้ามบอกว่าเป็น AI\n"
+      "3. เมื่อจบตอน ให้ตั้งคำถามหรือเปิดฉากเพื่อให้ผู้ใช้เลือกตอบต่อ"
   )
-  temperature_val = 1.1
+  temp_val = 1.1
 else:
   roleplay_instruction = (
-      f"{base_prompt}\n\n[กฎเหล็กสำหรับโหมดแชทปกติ]:\n"
-      "1. สวมบทบาทเป็นตัวละครนั้นแบบ 100% ห้ามบอกว่าเป็น AI เด็ดขาด\n"
-      "2. พูดจาภาษาคนธรรมดา ใช้น้ำเสียงธรรมชาติเหมือนแชทหากันจริงๆ"
-      " พิมพ์ตอบสั้นกระชับเป็นธรรมชาติ\n"
-      "3. ห้ามมีคำพูดลงท้ายแบบบอท เช่น 'มีอะไรให้ช่วยอีกไหมคะ'"
+      f"{base_prompt}\n\n[กฎการตอบ]:\n"
+      "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี\n"
+      "2. ห้ามใช้คำพูดเชิงบอทหรือคำทางการ\n"
+      "3. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์"
   )
-  temperature_val = 0.9
+  temp_val = 0.9
 
 current_messages = active_char_data["messages"]
-st.subheader(f"📖 กำลังสวมบทบาทกับ: {st.session_state.current_char}")
 
-# แสดงแชท
+# แสดงหัวข้อห้องแชทปัจจุบันพร้อมไอคอน
+st.markdown(f"### 💬 กำลังคุยกับ: `{st.session_state.current_char}`")
+st.divider()
+
+# แสดงประวัติแชทพร้อม Avatar สุดน่ารัก
 for message in current_messages:
-  with st.chat_message(message["role"]):
-    st.markdown(message["content"])
+  if message["role"] == "user":
+    with st.chat_message("user", avatar="👤"):
+      st.markdown(message["content"])
+  else:
+    with st.chat_message("assistant", avatar="🤖"):
+      st.markdown(message["content"])
 
 # ช่องพิมพ์ข้อความ
 if user_input := st.chat_input(
-    f"พิมพ์โต้ตอบกับ {st.session_state.current_char}..."
+    f"ส่งข้อความหา {st.session_state.current_char}..."
 ):
   current_messages.append({"role": "user", "content": user_input})
-  with st.chat_message("user"):
+  with st.chat_message("user", avatar="👤"):
     st.markdown(user_input)
 
-  with st.chat_message("assistant"):
+  with st.chat_message("assistant", avatar="🤖"):
     message_placeholder = st.empty()
-    message_placeholder.markdown("กำลังร้อยเรียงเรื่องราว...")
+    message_placeholder.markdown("กำลังพิมพ์...")
 
     bot_response = None
     max_retries = 3
@@ -155,7 +181,7 @@ if user_input := st.chat_input(
             history=formatted_history if formatted_history else None,
             config={
                 "system_instruction": roleplay_instruction,
-                "temperature": temperature_val,
+                "temperature": temp_val,
             },
         )
 
