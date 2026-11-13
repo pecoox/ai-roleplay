@@ -168,26 +168,37 @@ with st.sidebar:
 
   is_form_expanded = len(all_chars) == 0
   with st.expander("📌 ฟอร์มสร้างตัวละครหลัก", expanded=is_form_expanded):
-    new_name = st.text_input("ชื่อตัวละครหลัก:", placeholder="เช่น อลิซ...")
+    new_name = st.text_input("ชื่อตัวละครหลัก:", placeholder="เช่น เดรโก มัลฟอย...")
     new_prompt = st.text_area(
         "คาแรคเตอร์หลัก (Prompt):", placeholder="คุณคือ...", height=60
     )
     new_personality = st.text_area(
-        "🧠 บุคลิก/นิสัย:", placeholder="เข้มงวด, เป็นกันเอง...", height=60
+        "🧠 บุคลิก/นิสัย:", placeholder="หยิ่ง ทะนงตัว...", height=60
     )
     new_lore = st.text_area(
         "📖 เรื่องราวพื้นหลัง (Lore):",
         placeholder="สถานะเริ่มต้น ความสัมพันธ์...",
         height=70,
     )
-    # ปรับช่องข้อความแรกให้ใส่ได้ 3 บรรทัด (3 รูปแบบการทักทาย)
-    new_first_msg = st.text_area(
-        "💬 ข้อความแรก (ใส่ได้ 3 บรรทัด แยกบรรทัดละแบบ):",
-        placeholder=(
-            "สวัสดีครับ...\nเอ๊ะ ใครน่ะ...\nยินดีที่ได้รู้จักครับ..."
-        ),
-        height=90,
+
+    st.markdown("---")
+    st.markdown("💬 **ข้อความแรก (กำหนด 3 รูปแบบ)**")
+    msg_1 = st.text_area(
+        "#1 ข้อความแรกแบบที่ 1:",
+        placeholder="สถานการณ์ที่ 1...",
+        height=100,
     )
+    msg_2 = st.text_area(
+        "#2 ข้อความแรกแบบที่ 2:",
+        placeholder="สถานการณ์ที่ 2...",
+        height=100,
+    )
+    msg_3 = st.text_area(
+        "#3 ข้อความแรกแบบที่ 3:",
+        placeholder="สถานการณ์ที่ 3...",
+        height=100,
+    )
+
     new_avatar = st.file_uploader(
         "รูปโปรไฟล์ตัวละครหลัก",
         type=["png", "jpg", "jpeg", "webp"],
@@ -201,11 +212,16 @@ with st.sidebar:
           avatar_bytes = (
               new_avatar.getvalue() if new_avatar is not None else None
           )
-          default_first_msg = (
-              new_first_msg
-              if new_first_msg
-              else f"สวัสดีครับ ฉันชื่อ {new_name}"
+
+          # รวม 3 ช่องเข้าด้วยกันโดยคั่นด้วยตัวแบ่งพิเศษ เพื่อเก็บลงฐานข้อมูลคอลัมน์เดียว
+          combined_msgs = json.dumps(
+              [m.strip() for m in [msg_1, msg_2, msg_3] if m.strip()],
+              ensure_ascii=False,
           )
+          if not json.loads(combined_msgs):
+            combined_msgs = json.dumps(
+                [f"สวัสดีครับ ฉันชื่อ {new_name}"], ensure_ascii=False
+            )
 
           cursor.execute(
               """
@@ -217,7 +233,7 @@ with st.sidebar:
                   new_prompt,
                   new_personality,
                   new_lore,
-                  default_first_msg,
+                  combined_msgs,
                   avatar_bytes,
               ),
           )
@@ -229,15 +245,11 @@ with st.sidebar:
               (new_name, 0, "คนแปลกหน้า"),
           )
 
-          # สุ่มเลือก 1 บรรทัดจากที่กรอกไว้มาเป็นข้อความแรก
-          lines = [
-              l.strip()
-              for l in default_first_msg.split("\n")
-              if l.strip()
-          ]
+          # สุ่มเลือกข้อความแรกมา 1 อัน
+          msg_list = json.loads(combined_msgs)
           chosen_first_msg = (
-              random.choice(lines)
-              if lines
+              random.choice(msg_list)
+              if msg_list
               else f"สวัสดีครับ ฉันชื่อ {new_name}"
           )
 
@@ -281,13 +293,13 @@ with st.sidebar:
     ):
       with st.form("add_sub_char_form", clear_on_submit=True):
         sub_name = st.text_input(
-            "ชื่อตัวละครเสริม:", placeholder="เช่น เพื่อนสนิท..."
+            "ชื่อตัวละครเสริม:", placeholder="เช่น แครบบ์..."
         )
         sub_prompt = st.text_area(
-            "คาแรคเตอร์ตัวละครเสริม:", placeholder="คุณคือเพื่อนสนิท...", height=60
+            "คาแรคเตอร์ตัวละครเสริม:", placeholder="คุณคือลูกน้อง...", height=60
         )
         sub_personality = st.text_area(
-            "🧠 บุคลิกตัวละครเสริม:", placeholder="ขี้เล่น กวนๆ...", height=60
+            "🧠 บุคลิกตัวละครเสริม:", placeholder="ตัวใหญ่ ชอบกิน...", height=60
         )
         sub_lore = st.text_area(
             "📖 เรื่องราวพื้นหลังตัวละครเสริม:",
@@ -503,9 +515,16 @@ if not st.session_state.in_chat:
           else:
             st.markdown("**👥 ตัวละครเสริมในเรื่อง:** ไม่มี")
 
-          st.markdown(
-              f"**💬 ข้อความทักทายที่เป็นไปได้:**\n```{p_data[3]}```"
-          )
+          # แปลง JSON ข้อความแรกมาแสดงตัวอย่างแบบคร่าวๆ
+          try:
+            msgs_preview = json.loads(p_data[3])
+            preview_str = " / ".join(
+                [f"#{i+1} ({m[:30]}...)" for i, m in enumerate(msgs_preview)]
+            )
+          except Exception:
+            preview_str = "มีข้อความทักทาย"
+
+          st.markdown(f"**💬 รูปแบบข้อความแรก:** {preview_str}")
 
           if st.button(
               f"🚀 เริ่มต้นบทสนทนากับ {prev_name}",
@@ -536,7 +555,7 @@ if st.session_state.in_chat and st.session_state.current_char:
   base_prompt = char_data[0] if char_data and char_data[0] else ""
   char_personality = char_data[1] if char_data and char_data[1] else "ไม่มีข้อมูล"
   char_lore = char_data[2] if char_data and char_data[2] else "ไม่มีข้อมูล"
-  char_first_msg_raw = char_data[3] if char_data and char_data[3] else ""
+  char_first_msg_raw = char_data[3] if char_data and char_data[3] else "[]"
   char_avatar_blob = char_data[4] if char_data else None
 
   char_avatar_img = None
@@ -608,11 +627,14 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
     temp_val = 0.9
 
-  # ฟังก์ชันสุ่มข้อความแรก 1 บรรทัด
-  def get_random_first_msg(raw_text, char_name):
-    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
-    if lines:
-      return random.choice(lines)
+  # ฟังก์ชันสุ่มข้อความแรกจาก JSON List ที่ผู้ใช้กรอกแยกไว้ 3 ช่อง
+  def get_random_first_msg(raw_json, char_name):
+    try:
+      msgs = json.loads(raw_json)
+      if msgs and isinstance(msgs, list):
+        return random.choice(msgs)
+    except Exception:
+      pass
     return f"สวัสดีครับ ฉันชื่อ {char_name}"
 
   cursor.execute(
@@ -665,7 +687,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         """,
           (st.session_state.current_char,),
       )
-      # สุ่มประโยคแรกใหม่ตอนกดรีเซ็ต
+      # สุ่มข้อความแรกแบบใหม่จาก 3 ตัวเลือกเมื่อกดรีเซ็ต
       new_random_msg = get_random_first_msg(
           char_first_msg_raw, st.session_state.current_char
       )
@@ -679,7 +701,7 @@ if st.session_state.in_chat and st.session_state.current_char:
           ),
       )
       conn.commit()
-      st.success("รีเซ็ตบทสนทนาและสุ่มทักทายใหม่สำเร็จ!")
+      st.success("รีเซ็ตบทสนทนาและสุ่มข้อความทักทายใหม่สำเร็จ!")
       st.rerun()
 
   st.markdown(
