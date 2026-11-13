@@ -360,10 +360,12 @@ with st.sidebar:
             st.success("อัปเดตข้อมูลตัวละครสำเร็จ!")
             st.rerun()
 
+    # 👥 จัดการตัวละครเสริม (เพิ่ม / แก้ไข / ลบ)
     with st.expander(
-        f"👥 เพิ่มตัวละครเสริมให้: {st.session_state.current_char}",
+        f"👥 จัดการตัวละครเสริม ({st.session_state.current_char})",
         expanded=False,
     ):
+      st.markdown("### ➕ เพิ่มตัวละครเสริมใหม่")
       with st.form("add_sub_char_form", clear_on_submit=True):
         sub_name = st.text_input(
             "ชื่อตัวละครเสริม:", placeholder="เช่น แครบบ์..."
@@ -410,58 +412,185 @@ with st.sidebar:
           st.success(f"เพิ่มตัวละครเสริม '{sub_name}' สำเร็จ!")
           st.rerun()
 
-    st.markdown(f"### 🎯 เพิ่มภารกิจให้: `{st.session_state.current_char}`")
-    with st.form("add_quest_form_sidebar", clear_on_submit=True):
-      new_quest_desc = st.text_input(
-          "รายละเอียดภารกิจใหม่:", placeholder="เช่น ชวนไปกินกาแฟ..."
-      )
-      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15)
-      submit_quest = st.form_submit_button(
-          "➕ เพิ่มภารกิจนี้", use_container_width=True
-      )
-      if submit_quest and new_quest_desc:
-        cursor.execute(
-            "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, ?)",
-            (st.session_state.current_char, new_quest_desc, new_quest_pts),
-        )
-        conn.commit()
-        st.success("เพิ่มภารกิจสำเร็จ!")
-        st.rerun()
-
-    st.markdown(f"### 🖼️ คลังรูปของ: `{st.session_state.current_char}`")
-    st.caption("อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)")
-    gallery_key = f"gallery_upload_{st.session_state.current_char}"
-    uploaded_gallery_photos = st.file_uploader(
-        "Upload",
-        type=["png", "jpg", "jpeg", "webp"],
-        accept_multiple_files=True,
-        key=gallery_key,
-        label_visibility="collapsed",
-    )
-
-    if uploaded_gallery_photos:
+      st.markdown("---")
+      st.markdown("### ✏️ แก้ไข / ลบตัวละครเสริมที่มีอยู่")
       cursor.execute(
-          "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+          "SELECT id, sub_name FROM supporting_characters WHERE char_name = ?",
           (st.session_state.current_char,),
       )
-      current_db_count = cursor.fetchone()[0]
+      sub_list = cursor.fetchall()
+      if sub_list:
+        sub_dict = {s[1]: s[0] for s in sub_list}
+        selected_sub_name = st.selectbox(
+            "เลือกตัวละครเสริมที่ต้องการแก้ไข:", list(sub_dict.keys())
+        )
+        selected_sub_id = sub_dict[selected_sub_name]
 
-      if len(uploaded_gallery_photos) != current_db_count:
         cursor.execute(
-            "DELETE FROM character_photos WHERE char_name = ?",
+            "SELECT sub_prompt, sub_personality, sub_lore, sub_avatar FROM supporting_characters WHERE id = ?",
+            (selected_sub_id,),
+        )
+        sub_data = cursor.fetchone()
+        if sub_data:
+          sp_prompt, sp_pers, sp_lore, sp_av = sub_data
+          with st.form(f"edit_sub_form_{selected_sub_id}"):
+            e_sub_name = st.text_input("ชื่อตัวละครเสริม:", value=selected_sub_name)
+            e_sub_prompt = st.text_area("คาแรคเตอร์:", value=sp_prompt, height=60)
+            e_sub_pers = st.text_area("บุคลิก:", value=sp_pers, height=60)
+            e_sub_lore = st.text_area("เรื่องราวพื้นหลัง:", value=sp_lore, height=60)
+            e_sub_av = st.file_uploader(
+                "เปลี่ยนรูปตัวละครเสริม (ถ้ามี)",
+                type=["png", "jpg", "jpeg", "webp"],
+                key=f"edit_sub_av_{selected_sub_id}",
+            )
+
+            col_sub_e1, col_sub_e2 = st.columns(2)
+            with col_sub_e1:
+              submit_edit_sub = st.form_submit_button(
+                  "💾 บันทึกการแก้ไข", use_container_width=True
+              )
+            with col_sub_e2:
+              submit_del_sub = st.form_submit_button(
+                  "🗑️ ลบตัวละครนี้", use_container_width=True
+              )
+
+            if submit_edit_sub:
+              final_sub_av = (
+                  e_sub_av.getvalue() if e_sub_av is not None else sp_av
+              )
+              cursor.execute(
+                  """
+                    UPDATE supporting_characters 
+                    SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ?, sub_avatar = ? 
+                    WHERE id = ?
+                """,
+                  (
+                      e_sub_name,
+                      e_sub_prompt,
+                      e_sub_pers,
+                      e_sub_lore,
+                      final_sub_av,
+                      selected_sub_id,
+                  ),
+              )
+              conn.commit()
+              st.success("อัปเดตตัวละครเสริมสำเร็จ!")
+              st.rerun()
+
+            if submit_del_sub:
+              cursor.execute(
+                  "DELETE FROM supporting_characters WHERE id = ?",
+                  (selected_sub_id,),
+              )
+              conn.commit()
+              st.success("ลบตัวละครเสริมสำเร็จ!")
+              st.rerun()
+      else:
+        st.caption("ยังไม่มีตัวละครเสริมในเรื่องนี้")
+
+    # 🎯 จัดการภารกิจ (เพิ่ม / ลบ / แก้ไข Quest)
+    with st.expander(
+        f"🎯 จัดการภารกิจ (Quest Log) ({st.session_state.current_char})",
+        expanded=False,
+    ):
+      st.markdown("### ➕ เพิ่มภารกิจใหม่")
+      with st.form("add_quest_form_sidebar", clear_on_submit=True):
+        new_quest_desc = st.text_input(
+            "รายละเอียดภารกิจใหม่:", placeholder="เช่น ชวนไปกินกาแฟ..."
+        )
+        new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15)
+        submit_quest = st.form_submit_button(
+            "➕ เพิ่มภารกิจนี้", use_container_width=True
+        )
+        if submit_quest and new_quest_desc:
+          cursor.execute(
+              "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, ?)",
+              (st.session_state.current_char, new_quest_desc, new_quest_pts),
+          )
+          conn.commit()
+          st.success("เพิ่มภารกิจสำเร็จ!")
+          st.rerun()
+
+      st.markdown("---")
+      st.markdown("### 🗑️ ลบหรือรีเซ็ตภารกิจที่มีอยู่")
+      cursor.execute(
+          "SELECT id, task_desc, is_completed FROM quests WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      q_list = cursor.fetchall()
+      if q_list:
+        for q_id, q_desc, q_comp in q_list:
+          q_col1, q_col2 = st.columns([4, 1])
+          with q_col1:
+            status_text = "✅ สำเร็จแล้ว" if q_comp == 1 else "⏳ กำลังดำเนินการ"
+            st.markdown(f"- **[#{q_id}]** {q_desc} *({status_text})*")
+          with q_col2:
+            if st.button("🗑️ ลบ", key=f"del_q_{q_id}"):
+              cursor.execute("DELETE FROM quests WHERE id = ?", (q_id,))
+              conn.commit()
+              st.rerun()
+      else:
+        st.caption("ยังไม่มีภารกิจในระบบ")
+
+    # 🖼️ จัดการคลังรูปภาพประจำตัวละคร (ดูและลบรูปในคลัง)
+    with st.expander(
+        f"🖼️ จัดการคลังรูปภาพ ({st.session_state.current_char})",
+        expanded=False,
+    ):
+      st.markdown("### 📥 อัปโหลดรูปภาพเข้าคลัง")
+      gallery_key = f"gallery_upload_{st.session_state.current_char}"
+      uploaded_gallery_photos = st.file_uploader(
+          "อัปโหลดรูปภาพ (ให้ตัวละครสุ่มส่ง)",
+          type=["png", "jpg", "jpeg", "webp"],
+          accept_multiple_files=True,
+          key=gallery_key,
+      )
+
+      if uploaded_gallery_photos:
+        cursor.execute(
+            "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
             (st.session_state.current_char,),
         )
-        for photo in uploaded_gallery_photos:
+        current_db_count = cursor.fetchone()[0]
+
+        if len(uploaded_gallery_photos) != current_db_count:
           cursor.execute(
-              "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-              (st.session_state.current_char, photo.getvalue()),
+              "DELETE FROM character_photos WHERE char_name = ?",
+              (st.session_state.current_char,),
           )
-        conn.commit()
-        st.success("อัปเดตคลังรูปภาพสำเร็จ!")
-        st.rerun()
+          for photo in uploaded_gallery_photos:
+            cursor.execute(
+                "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+                (st.session_state.current_char, photo.getvalue()),
+            )
+          conn.commit()
+          st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+          st.rerun()
+
+      st.markdown("---")
+      st.markdown("### 🗑️ รูปภาพทั้งหมดในคลัง")
+      cursor.execute(
+          "SELECT id, photo FROM character_photos WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      photos_in_db = cursor.fetchall()
+      if photos_in_db:
+        p_cols = st.columns(3)
+        for idx, (p_id, p_blob) in enumerate(photos_in_db):
+          with p_cols[idx % 3]:
+            img_item = Image.open(io.BytesIO(p_blob))
+            st.image(img_item, use_container_width=True)
+            if st.button(f"🗑️ ลบรูปที่ #{p_id}", key=f"del_photo_{p_id}"):
+              cursor.execute(
+                  "DELETE FROM character_photos WHERE id = ?", (p_id,)
+              )
+              conn.commit()
+              st.rerun()
+      else:
+        st.caption("ยังไม่มีรูปภาพในคลัง")
 
     st.divider()
-    if st.button("🗑️ ลบตัวละครหลักนี้", use_container_width=True):
+    if st.button("🗑️ ลบตัวละครหลักนี้ทั้งหมด", use_container_width=True):
       cursor.execute(
           "DELETE FROM characters WHERE name = ?",
           (st.session_state.current_char,),
