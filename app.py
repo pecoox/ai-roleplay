@@ -136,9 +136,18 @@ def init_db():
         CREATE TABLE IF NOT EXISTS character_photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             char_name TEXT,
-            photo BLOB
+            photo BLOB,
+            photo_hash TEXT
         )
     """)
+
+  # ตรวจสอบคอลัมน์ photo_hash ป้องกันรูปซ้ำ
+  cursor.execute("PRAGMA table_info(character_photos)")
+  p_cols = [col[1] for col in cursor.fetchall()]
+  if "photo_hash" not in p_cols:
+    cursor.execute(
+        "ALTER TABLE character_photos ADD COLUMN photo_hash TEXT DEFAULT ''"
+    )
 
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
@@ -443,7 +452,7 @@ with st.sidebar:
   else:
     sidebar_action = "เลือกตัวละคร"
 
-  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ใช้ Key แยกตามชื่อตัวละครเพื่อบังคับรีเฟรช State)
+  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
   if all_chars:
     st.divider()
     selected_char = st.selectbox(
@@ -730,7 +739,7 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีภารกิจในระบบ")
 
-  # 5. จัดการคลังรูปภาพ (Admin Only) - แก้ไขแบบแยกคีย์เด็ดขาดตามชื่อตัวละคร
+  # 5. จัดการคลังรูปภาพ (Admin Only) - ป้องกันการอัปโหลดซ้ำวนลูป
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
@@ -738,14 +747,12 @@ with st.sidebar:
   ):
     st.markdown(f"### 🖼️ คลังรูป: {active_char}")
 
-    # ดึงรูปของตัวละครปัจจุบันจาก DB ทันที
     cursor.execute(
         "SELECT id, photo FROM character_photos WHERE char_name = ?",
         (active_char,),
     )
     photos_in_db = cursor.fetchall()
 
-    # ปุ่มเคลียร์รูปทั้งหมดของตัวละครนี้
     if photos_in_db:
       if st.button(
           "🗑️ ล้างรูปทั้งหมดของตัวละครนี้",
@@ -760,24 +767,36 @@ with st.sidebar:
         st.rerun()
 
     uploaded_gallery_photos = st.file_uploader(
-        "อัปโหลดรูปภาพเข้าคลัง (เพิ่มรูปใหม่)",
+        "อัปโหลดรูปภาพเข้าคลัง",
         type=["png", "jpg", "jpeg", "webp"],
         accept_multiple_files=True,
         key=f"gallery_upload_{active_char}",
     )
 
+    # ตรวจสอบและบันทึกเฉพาะรูปใหม่ที่ไม่ซ้ำในฐานข้อมูล
     if uploaded_gallery_photos:
+      new_uploaded = False
       for photo in uploaded_gallery_photos:
+        p_bytes = photo.getvalue()
+        p_hash = hashlib.md5(p_bytes).hexdigest()
+
         cursor.execute(
-            "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-            (active_char, photo.getvalue()),
+            "SELECT COUNT(*) FROM character_photos WHERE char_name = ? AND photo_hash = ?",
+            (active_char, p_hash),
         )
-      conn.commit()
-      st.success("อัปโหลดรูปภาพเข้าคลังสำเร็จ!")
-      st.rerun()
+        if cursor.fetchone()[0] == 0:
+          cursor.execute(
+              "INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)",
+              (active_char, p_bytes, p_hash),
+          )
+          new_uploaded = True
+
+      if new_uploaded:
+        conn.commit()
+        st.success("อัปโหลดรูปภาพเข้าคลังสำเร็จ!")
+        st.rerun()
 
     st.markdown("---")
-    # โหลดข้อมูลอัปเดตหลังกดลบหรืออัปโหลด
     cursor.execute(
         "SELECT id, photo FROM character_photos WHERE char_name = ?",
         (active_char,),
