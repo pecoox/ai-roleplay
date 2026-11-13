@@ -879,11 +879,8 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  if "show_quests" not in st.session_state:
-    st.session_state.show_quests = False
-
-  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มกดดูภารกิจและปุ่มรีเซ็ตแชทด้านบนสุด
-  col_av, col_title, col_q_btn, col_reset = st.columns([1, 4, 2, 2])
+  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มรีเซ็ตแชทด้านบน
+  col_av, col_title, col_reset = st.columns([1, 6, 2])
   with col_av:
     if char_avatar_img:
       st.image(char_avatar_img, width=60)
@@ -891,10 +888,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
   with col_title:
     st.markdown(f"### แชทกับ: `{st.session_state.current_char}`")
-  with col_q_btn:
-    if st.button("🎯 ดูภารกิจ", use_container_width=True):
-      st.session_state.show_quests = not st.session_state.show_quests
-      st.rerun()
   with col_reset:
     if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
       cursor.execute(
@@ -925,34 +918,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.success("รีเซ็ตบทสนทนาสำเร็จ!")
       st.rerun()
 
-  # แสดงหน้าต่างภารกิจด้านบนสุดเมื่อกดปุ่มดูภารกิจ
-  if st.session_state.show_quests:
-    with st.container(border=True):
-      st.markdown("#### 🎯 ภารกิจทั้งหมด (Quest Log)")
-      cursor.execute(
-          "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
-          (st.session_state.current_char,),
-      )
-      quests = cursor.fetchall()
-      if quests:
-        for q_id, desc, completed, pts in quests:
-          if completed:
-            st.markdown(
-                f"- ✅ **[ภารกิจที่ {q_id}]** ~~{desc}~~ — *สำเร็จแล้ว (+{pts} แต้ม)*"
-            )
-          else:
-            st.markdown(
-                f"- ⏳ **[ภารกิจที่ {q_id}]** {desc} — *ยังไม่สำเร็จ (รางวัล: {pts}"
-                " แต้ม)*"
-            )
-      else:
-        st.caption(
-            "ยังไม่มีภารกิจ สามารถเพิ่มได้ที่เมนู '🎯 จัดการภารกิจ' ด้านซ้ายครับ"
-        )
-      if st.button("❌ ปิดหน้าต่างภารกิจ", use_container_width=True):
-        st.session_state.show_quests = False
-        st.rerun()
-
   st.divider()
 
   for message in current_messages:
@@ -962,21 +927,38 @@ if st.session_state.in_chat and st.session_state.current_char:
     else:
       avatar_icon = char_avatar_img if char_avatar_img else "✨"
       with st.chat_message("assistant", avatar=avatar_icon):
-        # 💖 แถบสถานะความชอบ พร้อมลิงก์ปุ่มกดดูภารกิจตรงหัวข้อข้อความ AI
-        col_badge, col_btn = st.columns([4, 1.2])
+        # 💖 แถบสถานะความชอบ พร้อมปุ่ม Popover (กดแล้วหน้าต่างภารกิจจะกางค้างไว้ให้ดู ไม่หายไปไหน)
+        col_badge, col_pop = st.columns([4, 1.2])
         with col_badge:
           st.markdown(
               f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
               unsafe_allow_html=True,
           )
-        with col_btn:
-          if st.button(
-              "🎯 ภารกิจ",
-              key=f"q_btn_{message['content'][:15]}",
-              use_container_width=True,
-          ):
-            st.session_state.show_quests = not st.session_state.show_quests
-            st.rerun()
+        with col_pop:
+          with st.popover("🎯 ภารกิจ", use_container_width=True):
+            st.markdown("#### 🎯 รายการภารกิจทั้งหมด")
+            cursor.execute(
+                "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
+                (st.session_state.current_char,),
+            )
+            quests = cursor.fetchall()
+            if quests:
+              for q_id, desc, completed, pts in quests:
+                if completed:
+                  st.markdown(
+                      f"- ✅ **[ภารกิจที่ {q_id}]** ~~{desc}~~ — *สำเร็จแล้ว (+{pts}"
+                      " แต้ม)*"
+                  )
+                else:
+                  st.markdown(
+                      f"- ⏳ **[ภารกิจที่ {q_id}]** {desc} — *ยังไม่สำเร็จ"
+                      f" (รางวัล: {pts} แต้ม)*"
+                  )
+            else:
+              st.caption(
+                  "ยังไม่มีภารกิจ สามารถเพิ่มได้ที่เมนู '🎯 จัดการภารกิจ' ด้านซ้าย"
+                  " ครับ"
+              )
 
         st.markdown(message["content"])
         if message["image"]:
