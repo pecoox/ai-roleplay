@@ -468,7 +468,7 @@ with st.sidebar:
         "เลือกการจัดการ:",
         [
             "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-            "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
+            "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)",
             "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
             "🗑️ ลบตัวละครหลัก",
@@ -484,7 +484,7 @@ with st.sidebar:
   # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
   if all_chars and sidebar_action not in [
       "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-      "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
+      "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)",
   ]:
     st.divider()
     selected_char = st.selectbox(
@@ -608,50 +608,50 @@ with st.sidebar:
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
 
-  # 🌐 ปรับปรุงใหม่: นำเข้าตัวละครด้วยลิงก์หรือก๊อปปี้ข้อความรายละเอียดจากเว็บมาแปะ
-  elif is_current_admin and sidebar_action == "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ":
-    st.markdown("### 🌐 นำเข้าตัวละครจากเว็บ AI / ข้อมูลโปรไฟล์")
+  # 🌐 ระบบ Smart Parser: นำเข้าตัวละครจากข้อความรายละเอียดหน้าเว็บแบบจัดเต็ม
+  elif is_current_admin and sidebar_action == "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)":
+    st.markdown("### 🌐 นำเข้าตัวละครจากข้อมูลหน้าเว็บ")
     st.caption(
-        "เนื่องจากเว็บไซต์ตัวละครส่วนใหญ่ (เช่น Lovecube) บล็อกการดึงข้อมูลอัตโนมัติ"
-        " แนะนำให้ **ก๊อปปี้ชื่อและประวัติบุคลิกจากหน้าเว็บมาวางในช่องด้านล่างนี้ได้เลยครับ!**"
+        "ก๊อปปี้ข้อความทั้งหมดจากหน้าเว็บตัวละคร (รวมทั้งชื่อ, ประวัติ, บุคลิก, ตัวละครสนับสนุน, ข้อความเปิดตัว และภารกิจ) มาวางลงในช่องนี้ แล้วให้ AI จัดการแปลงเข้าฐานข้อมูลให้อัตโนมัติทั้งหมด!"
     )
 
-    with st.form("web_paste_char_form"):
-      import_text = st.text_area(
-          "วางข้อมูลตัวละคร / ลิงก์ / รายละเอียดจากเว็บ:",
-          placeholder=(
-              "เช่น: มิราเจน สเตาร์ส นางแบบสาวแสนสวย... (ก๊อปปี้ข้อความจากหน้าเว็บมาวางตรงนี้ได้เลย)"
-          ),
-          height=150,
+    with st.form("smart_parser_form"):
+      pasted_text = st.text_area(
+          "วางข้อมูลที่ก๊อปปี้มาจากหน้าเว็บที่นี่:",
+          placeholder="วางข้อความทั้งหมดของ มิราเจน สเตราส์ ลงที่นี่...",
+          height=250,
       )
-      import_submit_btn = st.form_submit_button(
-          "🚀 ให้ AI แปลงข้อมูลนี้เป็นตัวละคร Roleplay",
-          use_container_width=True,
+      parse_submit_btn = st.form_submit_button(
+          "🚀 แปลงและบันทึกตัวละครเข้าสู่ระบบ", use_container_width=True
       )
 
-      if import_submit_btn and import_text:
+      if parse_submit_btn and pasted_text:
         with st.spinner(
-            "กำลังให้ AI วิเคราะห์ข้อมูลและจัดรูปแบบตัวละครให้อัตโนมัติ..."
+            "AI กำลังแยกวิเคราะห์ข้อมูล ชื่อ บุคลิก เรื่องราว ตัวละครเสริม และภารกิจ..."
         ):
           try:
-            prompt_gen = (
-                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลตัวละครให้เป็นรูปแบบ Roleplay\n"
-                f"ข้อมูลที่ผู้ใช้นำมาวาง: {import_text}\n\n"
-                f"กรุณาวิเคราะห์และสร้างข้อมูลตัวละครในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+            parser_prompt = (
+                f"คุณคือผู้เชี่ยวชาญการแยกแยะและจัดโครงสร้างข้อมูลตัวละครสำหรับ AI Roleplay\n"
+                f"ข้อมูลดิบที่ผู้ใช้นำมาวาง:\n{pasted_text}\n\n"
+                f"กรุณาวิเคราะห์และส่งออกเป็นรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โดยมีโครงสร้างดังนี้:\n"
                 "{\n"
                 '  "name": "ชื่อตัวละครหลัก",\n'
-                '  "prompt": "คาแรคเตอร์หลักและบทบาท",\n'
-                '  "personality": "บุคลิกและนิสัยใจคอตามข้อมูล",\n'
-                '  "lore": "เรื่องราวพื้นหลัง",\n'
-                '  "first_messages": ["ข้อความเปิดตัวที่ 1", "ข้อความเปิดตัวที่ 2"],\n'
-                '  "sub_name": "ชื่อตัวละครเสริมที่เกี่ยวข้อง 1 คน",\n'
-                '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
-                '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
-                '  "quest_desc": "ภารกิจเริ่มต้น"\n'
+                '  "prompt": "สรุปคาแรคเตอร์หลักและบทบาทสั้นๆ",\n'
+                '  "personality": "รายละเอียดบุคลิกและนิสัยใจคอทั้งหมด",\n'
+                '  "lore": "เรื่องราวพื้นหลังและประวัติทั้งหมด",\n'
+                '  "first_messages": ["ข้อความเปิดตัวที่ 1 จากข้อมูลเว็บ", "ข้อความเปิดตัวที่ 2", "ข้อความเปิดตัวที่ 3"],\n'
+                '  "supporting_chars": [\n'
+                '    {"name": "ชื่อตัวละครเสริมที่ 1", "prompt": "บทบาท", "personality": "บุคลิก", "lore": "ความสัมพันธ์"},\n'
+                '    {"name": "ชื่อตัวละครเสริมที่ 2", "prompt": "บทบาท", "personality": "บุคลิก", "lore": "ความสัมพันธ์"}\n'
+                "  ],\n"
+                '  "quests": [\n'
+                '    {"desc": "รายละเอียดภารกิจที่ 1", "pts": 10},\n'
+                '    {"desc": "รายละเอียดภารกิจที่ 2", "pts": 25}\n'
+                "  ]\n"
                 "}"
             )
             response = client.models.generate_content(
-                model=model_name, contents=prompt_gen
+                model=model_name, contents=parser_prompt
             )
             raw_res = response.text.strip()
 
@@ -659,21 +659,20 @@ with st.sidebar:
               json_text = raw_res[
                   raw_res.find("{") : raw_res.rfind("}") + 1
               ]
-              char_info = json.loads(json_text)
+              parsed_data = json.loads(json_text)
 
-              c_name = char_info.get("name", "ตัวละครนำเข้า")
-              c_prompt = char_info.get("prompt", "คุณคือ...")
-              c_pers = char_info.get("personality", "มีเสน่ห์...")
-              c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
-              f_msgs = char_info.get(
+              c_name = parsed_data.get("name", "ตัวละครนำเข้า")
+              c_prompt = parsed_data.get("prompt", "คุณคือ...")
+              c_pers = parsed_data.get("personality", "น่าสนใจ...")
+              c_lore = parsed_data.get("lore", "ประวัติ...")
+              f_msgs = parsed_data.get(
                   "first_messages",
                   [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
               )
-              s_name = char_info.get("sub_name", "ผู้เกี่ยวข้อง")
-              s_prompt = char_info.get("sub_prompt", "คอยสนับสนุน")
-              s_pers = char_info.get("sub_personality", "เป็นมิตร")
-              q_desc = char_info.get("quest_desc", "ทำความรู้จักกันเบื้องต้น")
+              sub_list = parsed_data.get("supporting_chars", [])
+              quest_list = parsed_data.get("quests", [])
 
+              # 1. บันทึกตัวละครหลัก
               cursor.execute(
                   "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                   (
@@ -686,35 +685,45 @@ with st.sidebar:
                   ),
               )
 
-              cursor.execute(
-                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                  (
-                      c_name,
-                      s_name,
-                      s_prompt,
-                      s_pers,
-                      "บุคคลในเนื้อเรื่อง",
-                  ),
-              )
+              # 2. บันทึกตัวละครเสริม (ถ้ามี)
+              for sub in sub_list:
+                s_name = sub.get("name", "ตัวละครเสริม")
+                s_prompt = sub.get("prompt", "บทบาท")
+                s_pers = sub.get("personality", "นิสัย")
+                s_lore = sub.get("lore", "ประวัติ")
+                cursor.execute(
+                    "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
+                    (c_name, s_name, s_prompt, s_pers, s_lore),
+                )
 
-              cursor.execute(
-                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                  (c_name, q_desc, 20),
-              )
+              # 3. บันทึกภารกิจ (ถ้ามี)
+              if quest_list:
+                for q in quest_list:
+                  q_desc = q.get("desc", "ทำภารกิจร่วมกัน")
+                  q_pts = q.get("pts", 15)
+                  cursor.execute(
+                      "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                      (c_name, q_desc, q_pts),
+                  )
+              else:
+                cursor.execute(
+                    "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                    (c_name, "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม", 20),
+                )
 
               conn.commit()
               st.session_state.current_char = c_name
               st.session_state.in_chat = True
               st.success(
-                  f"🎉 นำเข้าและสร้างตัวละคร '{c_name}' สำเร็จเรียบร้อยแล้ว!"
+                  f"🎉 นำเข้าและแยกแยะข้อมูลตัวละคร '{c_name}' สำเร็จเรียบร้อยแล้ว!"
               )
               st.rerun()
             else:
               st.error(
-                  "ไม่สามารถแปลงข้อมูลได้ กรุณาลองตรวจสอบข้อความแล้วลองใหม่อีกครั้ง"
+                  "ไม่สามารถแปลงข้อมูลได้ กรุณาตรวจสอบข้อความที่นำมาวางแล้วลองใหม่อีกครั้ง"
               )
           except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+            st.error(f"เกิดข้อผิดพลาดในการประมวลผล: {e}")
 
   # 🗑️ ลบตัวละครหลัก
   elif is_current_admin and sidebar_action == "🗑️ ลบตัวละครหลัก":
@@ -1179,7 +1188,7 @@ with st.sidebar:
       not in [
           "➕ สร้างตัวละครหลักใหม่ (Manual)",
           "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
-          "🌐 นำเข้าตัวละครด้วยข้อมูล/ลิงก์เว็บ",
+          "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)",
       ]
   ):
     st.info("ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
