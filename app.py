@@ -608,7 +608,7 @@ with st.sidebar:
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
 
-  # 🌐 ระบบ Smart Parser: นำเข้าตัวละครจากข้อความรายละเอียดหน้าเว็บแบบจัดเต็ม
+  # 🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)
   elif is_current_admin and sidebar_action == "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)":
     st.markdown("### 🌐 นำเข้าตัวละครจากข้อมูลหน้าเว็บ")
     st.caption(
@@ -618,7 +618,7 @@ with st.sidebar:
     with st.form("smart_parser_form"):
       pasted_text = st.text_area(
           "วางข้อมูลที่ก๊อปปี้มาจากหน้าเว็บที่นี่:",
-          placeholder="วางข้อความทั้งหมดของ มิราเจน สเตราส์ ลงที่นี่...",
+          placeholder="วางข้อความทั้งหมดของตัวละคร ลงที่นี่...",
           height=250,
       )
       parse_submit_btn = st.form_submit_button(
@@ -639,7 +639,7 @@ with st.sidebar:
                 '  "prompt": "สรุปคาแรคเตอร์หลักและบทบาทสั้นๆ",\n'
                 '  "personality": "รายละเอียดบุคลิกและนิสัยใจคอทั้งหมด",\n'
                 '  "lore": "เรื่องราวพื้นหลังและประวัติทั้งหมด",\n'
-                '  "first_messages": ["ข้อความเปิดตัวที่ 1 จากข้อมูลเว็บ", "ข้อความเปิดตัวที่ 2", "ข้อความเปิดตัวที่ 3"],\n'
+                '  "first_messages": ["ข้อความเปิดตัวที่ 1 จากข้อมูลเว็บ", "ข้อความเปิดตัวแบบที่ 2", "ข้อความเปิดตัวแบบที่ 3"],\n'
                 '  "supporting_chars": [\n'
                 '    {"name": "ชื่อตัวละครเสริมที่ 1", "prompt": "บทบาท", "personality": "บุคลิก", "lore": "ความสัมพันธ์"},\n'
                 '    {"name": "ชื่อตัวละครเสริมที่ 2", "prompt": "บทบาท", "personality": "บุคลิก", "lore": "ความสัมพันธ์"}\n'
@@ -672,7 +672,6 @@ with st.sidebar:
               sub_list = parsed_data.get("supporting_chars", [])
               quest_list = parsed_data.get("quests", [])
 
-              # 1. บันทึกตัวละครหลัก
               cursor.execute(
                   "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
                   (
@@ -685,7 +684,6 @@ with st.sidebar:
                   ),
               )
 
-              # 2. บันทึกตัวละครเสริม (ถ้ามี)
               for sub in sub_list:
                 s_name = sub.get("name", "ตัวละครเสริม")
                 s_prompt = sub.get("prompt", "บทบาท")
@@ -696,7 +694,6 @@ with st.sidebar:
                     (c_name, s_name, s_prompt, s_pers, s_lore),
                 )
 
-              # 3. บันทึกภารกิจ (ถ้ามี)
               if quest_list:
                 for q in quest_list:
                   q_desc = q.get("desc", "ทำภารกิจร่วมกัน")
@@ -1195,7 +1192,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก
+# 🏠 หน้าแรก (พร้อมปุ่มดูบทบาทตัวละคร)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1278,19 +1275,56 @@ if not st.session_state.in_chat:
     cols = st.columns(3)
     for idx, c_name in enumerate(all_chars):
       cursor.execute(
-          "SELECT personality, avatar FROM characters WHERE name = ?", (c_name,)
+          "SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?",
+          (c_name,),
       )
       c_data = cursor.fetchone()
+      c_prompt, c_pers, c_lore, c_av = (
+          (c_data[0], c_data[1], c_data[2], c_data[3])
+          if c_data
+          else ("", "", "", None)
+      )
+
       with cols[idx % 3]:
         with st.container(border=True):
-          if c_data and c_data[1]:
-            st.image(Image.open(io.BytesIO(c_data[1])), use_container_width=True)
+          if c_av:
+            st.image(Image.open(io.BytesIO(c_av)), use_container_width=True)
           else:
             st.image(
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
                 use_container_width=True,
             )
           st.markdown(f"### 🌟 {c_name}")
+
+          # ปุ่มดูบทบาทตัวละคร (Pop-up)
+          with st.popover("📖 ดูบทบาท / ข้อมูลตัวละคร", use_container_width=True):
+            st.markdown(f"### 🌟 {c_name}")
+            st.markdown(f"**📌 คาแรคเตอร์:**\n{c_prompt}")
+            st.markdown(f"**🧠 บุคลิก/นิสัย:**\n{c_pers}")
+            st.markdown(f"**📖 เรื่องราวพื้นหลัง:**\n{c_lore}")
+
+            cursor.execute(
+                "SELECT sub_name, sub_prompt, sub_lore FROM supporting_characters WHERE char_name = ?",
+                (c_name,),
+            )
+            subs = cursor.fetchall()
+            if subs:
+              st.markdown("---")
+              st.markdown("**👥 ตัวละครเสริมในเรื่อง:**")
+              for s_name, s_p, s_l in subs:
+                st.markdown(f"- **{s_name}**: {s_p} *({s_l})*")
+
+            cursor.execute(
+                "SELECT task_desc, reward_points FROM quests WHERE char_name = ?",
+                (c_name,),
+            )
+            quests = cursor.fetchall()
+            if quests:
+              st.markdown("---")
+              st.markdown("**🎯 ภารกิจเริ่มต้น:**")
+              for q_desc, q_pts in quests:
+                st.markdown(f"- {q_desc} `(+{q_pts} แต้ม)`")
+
           if st.button(
               f"✨ เริ่มแชทกับ {c_name}",
               key=f"b_{c_name}",
