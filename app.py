@@ -1138,12 +1138,14 @@ if st.session_state.in_chat and st.session_state.current_char:
   )
 
   cursor.execute(
-      "SELECT sub_name, sub_prompt FROM supporting_characters WHERE char_name = ?",
+      "SELECT sub_name, sub_prompt, sub_personality FROM supporting_characters WHERE char_name = ?",
       (st.session_state.current_char,),
   )
-  supporting_text = ", ".join(
-      [f"{s[0]} ({s[1]})" for s in cursor.fetchall()]
-  ) or "ไม่มี"
+  subs_data = cursor.fetchall()
+  supporting_text = (
+      ", ".join([f"{s[0]} ({s[1]}, นิสัย: {s[2]})" for s in subs_data])
+      or "ไม่มี"
+  )
 
   cursor.execute(
       "INSERT OR IGNORE INTO character_status (username, char_name, affection_score, relationship_level) VALUES (?, ?, 0, 'คนแปลกหน้า')",
@@ -1160,18 +1162,24 @@ if st.session_state.in_chat and st.session_state.current_char:
       (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
   )
 
+  # ✍️ อัปเกรด System Instruction เน้นสไตล์นิยาย พรีเมียม และมีตัวละครเสริมแจม
   roleplay_instruction = f"""
-{base_prompt}
+คุณคือนักเขียนนิยายและผู้สวมบทบาท (Roleplayer) ตัวละครหลักชื่อ '{st.session_state.current_char}' 
+- ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
 - นิสัย: {char_personality}
-- พื้นหลัง: {char_lore}
-- ตัวละครเสริม: {supporting_text}
+- เรื่องราวพื้นหลัง (Lore): {char_lore}
+- ตัวละครเสริมที่มีในเรื่อง: {supporting_text}
 
 [ผู้สนทนา]: ชื่อ {u_name} | ประวัติ: {u_persona} | สรรพนามพูด: {u_pspeak} | สรรพนามบรรยาย: {u_pdesc} | เรียกผู้ใช้: {u_cspeak}
 - ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
-[กฎการตอบ]:
-1. ตอบสไตล์นิยายบรรยาย ใส่ท่าทางความรู้สึกด้วยเครื่องหมาย *...* สวมบทบาท 100%
-2. บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ:
+[กฎการเขียนบทบาท - เคร่งครัด]:
+1. **สไตล์นิยายบรรยายขั้นสูง**: บรรยายบรรยากาศ ท่าทาง สีหน้า แววตา และภาษากายให้ออกมาเห็นภาพชัดเจน
+2. **แยกคำพูดและการกระทำ/ความคิดชัดเจน**: 
+   - คำพูดตัวละครให้อยู่ในเครื่องหมายคำพูด เช่น "{st.session_state.current_char}: \"...\""
+   - ท่าทาง บรรยากาศ และ **ความคิดในใจ (Inner Thoughts)** ให้อยู่ในเครื่องหมายดอกจัน เช่น *... (คิดในใจว่า...) *
+3. **การมีส่วนร่วมของตัวละครเสริม**: ให้ดึงตัวละครเสริมที่มีอยู่ในเรื่องเข้ามามีบทบาทพูดคุย หรือโต้ตอบกับตัวละครหลักและผู้เล่นบ้างตามความเหมาะสม เพื่อสร้างสีสันเหมือนฉากในนิยาย
+4. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
 {{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}}
 """
 
@@ -1183,7 +1191,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         return random.choice(msgs)
     except Exception:
       pass
-    return f"สวัสดีครับ ฉันชื่อ {char_name}"
+    return f"*มองหน้าคุณด้วยแววตานิ่งสงบ* \"สวัสดีครับ {u_name} มีอะไรให้ผมช่วยหรือเปล่า?\""
 
 
   cursor.execute(
@@ -1232,17 +1240,14 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
   with col_reset:
     if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
-      # ลบข้อความแชท
       cursor.execute(
           "DELETE FROM messages WHERE username = ? AND char_name = ?",
           (current_user, st.session_state.current_char),
       )
-      # รีเซ็ตแต้มความชอบ
       cursor.execute(
           "UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = ? AND char_name = ?",
           (current_user, st.session_state.current_char),
       )
-      # 🛠️ รีเซ็ตสถานะภารกิจทั้งหมดของตัวละครนี้ให้กลับเป็นยังไม่ทำ
       cursor.execute(
           """
           DELETE FROM user_quests 
@@ -1372,7 +1377,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         message_placeholder.markdown(bot_response)
         eval_data = {"score_change": score_change, "quest_update": completed_q_id}
       else:
-        message_placeholder.markdown("กำลังพิมพ์...")
+        message_placeholder.markdown("กำลังประพันธ์เรื่องราว...")
 
         bot_response = None
         eval_data = {}
