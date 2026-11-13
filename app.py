@@ -880,7 +880,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มรีเซ็ตและปุ่มกดดูภารกิจ
+  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มดูภารกิจและปุ่มรีเซ็ตแชทแบบเห็นเด่นชัดด้านบน
   col_av, col_title, col_quest_btn, col_reset = st.columns([1, 4, 1.5, 1.5])
   with col_av:
     if char_avatar_img:
@@ -890,7 +890,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   with col_title:
     st.markdown(f"### แชทกับ: `{st.session_state.current_char}`")
   with col_quest_btn:
-    # 🎯 ปุ่มกดเปิด/ปิดดูภารกิจ
     if "show_quests" not in st.session_state:
       st.session_state.show_quests = False
     if st.button("🎯 ดูภารกิจ", use_container_width=True):
@@ -926,7 +925,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.success("รีเซ็ตบทสนทนาสำเร็จ!")
       st.rerun()
 
-  # แสดงตารางภารกิจถ้าผู้ใช้กดปุ่มดูภารกิจ
+  # แสดงหน้าต่างภารกิจด้านบนสุดเมื่อกดปุ่มดูภารกิจ
   if st.session_state.show_quests:
     with st.container(border=True):
       st.markdown("#### 🎯 ภารกิจทั้งหมด (Quest Log)")
@@ -950,13 +949,12 @@ if st.session_state.in_chat and st.session_state.current_char:
         st.caption(
             "ยังไม่มีภารกิจ สามารถเพิ่มได้ที่เมนู '🎯 จัดการภารกิจ' ด้านซ้ายครับ"
         )
-      if st.button("❌ ปิดหน้าต่างภารกิจ"):
+      if st.button("❌ ปิดหน้าต่างภารกิจ", use_container_width=True):
         st.session_state.show_quests = False
         st.rerun()
 
   st.divider()
 
-  # แสดงประวัติแชท พร้อมหลอดความชอบดวงน้อยบนหัวข้อความ AI
   for message in current_messages:
     if message["role"] == "user":
       with st.chat_message("user", avatar="👤"):
@@ -964,7 +962,6 @@ if st.session_state.in_chat and st.session_state.current_char:
     else:
       avatar_icon = char_avatar_img if char_avatar_img else "✨"
       with st.chat_message("assistant", avatar=avatar_icon):
-        # 💖 แสดงหลอดสถานะความชอบแบบเล็กๆ ไว้บนหัวข้อความ AI ทุกข้อความ
         st.markdown(
             f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
             unsafe_allow_html=True,
