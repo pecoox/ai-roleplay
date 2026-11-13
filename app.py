@@ -180,8 +180,13 @@ with st.sidebar:
         placeholder="สถานะเริ่มต้น ความสัมพันธ์...",
         height=70,
     )
+    # ปรับช่องข้อความแรกให้ใส่ได้ 3 บรรทัด (3 รูปแบบการทักทาย)
     new_first_msg = st.text_area(
-        "💬 ข้อความแรก:", placeholder="ประโยคแรกที่ทักทาย...", height=60
+        "💬 ข้อความแรก (ใส่ได้ 3 บรรทัด แยกบรรทัดละแบบ):",
+        placeholder=(
+            "สวัสดีครับ...\nเอ๊ะ ใครน่ะ...\nยินดีที่ได้รู้จักครับ..."
+        ),
+        height=90,
     )
     new_avatar = st.file_uploader(
         "รูปโปรไฟล์ตัวละครหลัก",
@@ -224,10 +229,22 @@ with st.sidebar:
               (new_name, 0, "คนแปลกหน้า"),
           )
 
+          # สุ่มเลือก 1 บรรทัดจากที่กรอกไว้มาเป็นข้อความแรก
+          lines = [
+              l.strip()
+              for l in default_first_msg.split("\n")
+              if l.strip()
+          ]
+          chosen_first_msg = (
+              random.choice(lines)
+              if lines
+              else f"สวัสดีครับ ฉันชื่อ {new_name}"
+          )
+
           cursor.execute(
               "INSERT INTO messages (char_name, role, content, image_blob)"
               " VALUES (?, ?, ?, ?)",
-              (new_name, "assistant", default_first_msg, None),
+              (new_name, "assistant", chosen_first_msg, None),
           )
           conn.commit()
           st.session_state.current_char = new_name
@@ -486,7 +503,9 @@ if not st.session_state.in_chat:
           else:
             st.markdown("**👥 ตัวละครเสริมในเรื่อง:** ไม่มี")
 
-          st.markdown(f"**💬 ข้อความทักทายแรก:** *\"{p_data[3]}\"*")
+          st.markdown(
+              f"**💬 ข้อความทักทายที่เป็นไปได้:**\n```{p_data[3]}```"
+          )
 
           if st.button(
               f"🚀 เริ่มต้นบทสนทนากับ {prev_name}",
@@ -517,7 +536,7 @@ if st.session_state.in_chat and st.session_state.current_char:
   base_prompt = char_data[0] if char_data and char_data[0] else ""
   char_personality = char_data[1] if char_data and char_data[1] else "ไม่มีข้อมูล"
   char_lore = char_data[2] if char_data and char_data[2] else "ไม่มีข้อมูล"
-  char_first_msg = char_data[3] if char_data and char_data[3] else ""
+  char_first_msg_raw = char_data[3] if char_data and char_data[3] else ""
   char_avatar_blob = char_data[4] if char_data else None
 
   char_avatar_img = None
@@ -589,15 +608,25 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
     temp_val = 0.9
 
+  # ฟังก์ชันสุ่มข้อความแรก 1 บรรทัด
+  def get_random_first_msg(raw_text, char_name):
+    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
+    if lines:
+      return random.choice(lines)
+    return f"สวัสดีครับ ฉันชื่อ {char_name}"
+
   cursor.execute(
       "SELECT COUNT(*) FROM messages WHERE char_name = ?",
       (st.session_state.current_char,),
   )
-  if cursor.fetchone()[0] == 0 and char_first_msg:
+  if cursor.fetchone()[0] == 0:
+    init_msg = get_random_first_msg(
+        char_first_msg_raw, st.session_state.current_char
+    )
     cursor.execute(
         "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?,"
         " ?, ?)",
-        (st.session_state.current_char, "assistant", char_first_msg, None),
+        (st.session_state.current_char, "assistant", init_msg, None),
     )
     conn.commit()
 
@@ -623,7 +652,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   with col_title:
     st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
   with col_reset:
-    # 🔄 ปุ่มรีเซ็ตแชทและเริ่มคุยใหม่
     if st.button("🔄 รีเซ็ตแชทใหม่", use_container_width=True):
       cursor.execute(
           "DELETE FROM messages WHERE char_name = ?",
@@ -637,13 +665,21 @@ if st.session_state.in_chat and st.session_state.current_char:
         """,
           (st.session_state.current_char,),
       )
-      if char_first_msg:
-        cursor.execute(
-            "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?, ?, ?)",
-            (st.session_state.current_char, "assistant", char_first_msg, None),
-        )
+      # สุ่มประโยคแรกใหม่ตอนกดรีเซ็ต
+      new_random_msg = get_random_first_msg(
+          char_first_msg_raw, st.session_state.current_char
+      )
+      cursor.execute(
+          "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?, ?, ?)",
+          (
+              st.session_state.current_char,
+              "assistant",
+              new_random_msg,
+              None,
+          ),
+      )
       conn.commit()
-      st.success("รีเซ็ตบทสนทนาสำเร็จ!")
+      st.success("รีเซ็ตบทสนทนาและสุ่มทักทายใหม่สำเร็จ!")
       st.rerun()
 
   st.markdown(
