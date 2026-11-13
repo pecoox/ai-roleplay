@@ -3,29 +3,35 @@ import streamlit as st
 import time
 
 st.set_page_config(
-    page_title="AI Roleplay - Modern Chat", page_icon="✨", layout="centered"
+    page_title="AI Roleplay - Premium UI", page_icon="💖", layout="centered"
 )
 
-# 🎨 ปรับแต่ง CSS ใหม่ให้ตัวหนังสือชัดเจน รองรับโหมดมืด/สว่าง และดูโมเดิร์นขึ้น
+# 🎨 ดีไซน์ CSS พรีเมียม: กล่องแชทโค้งมน มีมิติ และอ่านง่ายในทุกธีม
 st.markdown(
     """
     <style>
-    /* ปรับแต่งกล่องข้อความแชทให้อ่านง่ายในทุกโหมด */
+    /* ปรับแต่งภาพรวมของข้อความแชท */
     .stChatMessage {
-        border-radius: 16px;
-        padding: 12px 16px;
-        margin-bottom: 12px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-radius: 20px !important;
+        padding: 15px 20px !important;
+        margin-bottom: 16px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid rgba(255,255,255,0.1);
     }
-    /* ซ่อน Header และ Footer */
+    /* ซ่อน Header และ Footer มาตรฐาน */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* ตกแต่งแถบ Sidebar ให้ดูสะอาดตา */
+    [data-testid="stSidebar"] {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-st.title("✨ AI Roleplay: Modern Chat")
+st.title("💖 AI Roleplay: Premium Chat")
 
 # ดึง API Key
 try:
@@ -57,19 +63,19 @@ if "current_char" not in st.session_state:
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
-  st.header("⚙️ ตั้งค่าและตัวละคร")
+  st.header("✨ ควบคุมระบบ")
   chat_mode = st.radio(
-      "รูปแบบการคุย:", ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว"]
+      "เลือกสไตล์การคุย:", ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว"]
   )
 
   st.divider()
-  st.subheader("✨ สร้างตัวละครใหม่")
-  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, ตัวละครลับ...")
+  st.subheader("➕ สร้างตัวละครใหม่")
+  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, ไอดอล...")
   new_prompt = st.text_area(
-      "คาแรคเตอร์:", placeholder="คุณคือเพื่อนสนิทขี้เล่น...", height=90
+      "คาแรคเตอร์:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=90
   )
 
-  if st.button("➕ สร้างตัวละคร"):
+  if st.button("🚀 สร้างตัวละคร", use_container_width=True):
     if new_name and new_prompt:
       if new_name not in st.session_state.characters:
         st.session_state.characters[new_name] = {
@@ -88,7 +94,7 @@ with st.sidebar:
   st.subheader("👥 เลือกตัวละคร")
   char_list = list(st.session_state.characters.keys())
   selected_char = st.selectbox(
-      "เลือกคุยกับ:",
+      "สลับแชทกับ:",
       char_list,
       index=char_list.index(st.session_state.current_char),
   )
@@ -98,7 +104,7 @@ with st.sidebar:
     st.rerun()
 
   if len(st.session_state.characters) > 1:
-    if st.button("🗑️ ลบตัวละครนี้"):
+    if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
       del st.session_state.characters[st.session_state.current_char]
       st.session_state.current_char = list(
           st.session_state.characters.keys()
@@ -130,16 +136,18 @@ else:
 
 current_messages = active_char_data["messages"]
 
-st.markdown(f"### 💬 กำลังคุยกับ: `{st.session_state.current_char}`")
+st.markdown(
+    f"### 💬 ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`"
+)
 st.divider()
 
-# แสดงประวัติแชท (ใช้ฟังก์ชันมาตรฐานของ Streamlit เพื่อให้อ่านง่ายและไม่เพี้ยนใน Dark Mode)
+# แสดงประวัติแชท
 for message in current_messages:
   if message["role"] == "user":
     with st.chat_message("user", avatar="👤"):
       st.markdown(message["content"])
   else:
-    with st.chat_message("assistant", avatar="🤖"):
+    with st.chat_message("assistant", avatar="✨"):
       st.markdown(message["content"])
 
 # ช่องพิมพ์ข้อความ
@@ -150,7 +158,7 @@ if user_input := st.chat_input(
   with st.chat_message("user", avatar="👤"):
     st.markdown(user_input)
 
-  with st.chat_message("assistant", avatar="🤖"):
+  with st.chat_message("assistant", avatar="✨"):
     message_placeholder = st.empty()
     message_placeholder.markdown("กำลังพิมพ์...")
 
