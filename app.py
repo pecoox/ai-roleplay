@@ -571,7 +571,7 @@ with st.sidebar:
               st.session_state.current_char = c_name
               st.session_state.in_chat = True
               st.success(
-                  f"🎉 สร้างตัวละคร '{c_name' พร้อมใช้งานสำเร็จเรียบร้อย!"
+                  f"🎉 สร้างตัวละคร '{c_name}' พร้อมใช้งานสำเร็จเรียบร้อยแล้ว!"
               )
               st.rerun()
             else:
