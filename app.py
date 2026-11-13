@@ -2,31 +2,22 @@ from google import genai
 import streamlit as st
 import time
 
-# ตั้งค่าหน้าเว็บให้กว้างขึ้น (wide layout) เพื่อความสวยงามทันสมัย
 st.set_page_config(
-    page_title="AI Roleplay - Modern UI", page_icon="✨", layout="centered"
+    page_title="AI Roleplay - Modern Chat", page_icon="✨", layout="centered"
 )
 
-# 🎨 ตกแต่ง CSS เพิ่มความโค้งมนและหน้าตาให้โมเดิร์นเหมือนแอปแชทจริง
+# 🎨 ปรับแต่ง CSS ใหม่ให้ตัวหนังสือชัดเจน รองรับโหมดมืด/สว่าง และดูโมเดิร์นขึ้น
 st.markdown(
     """
     <style>
-    /* ปรับแต่งกล่องแชทข้อความของผู้ใช้ */
-    .stChatMessage[data-testid="stChatMessage"]:nth-child(odd) {
-        background-color: #f0f2f6;
-        border-radius: 15px;
-        padding: 10px;
-        margin-bottom: 10px;
+    /* ปรับแต่งกล่องข้อความแชทให้อ่านง่ายในทุกโหมด */
+    .stChatMessage {
+        border-radius: 16px;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-    /* ปรับแต่งกล่องแชทข้อความของ AI */
-    .stChatMessage[data-testid="stChatMessage"]:nth-child(even) {
-        background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 15px;
-        padding: 10px;
-        margin-bottom: 10px;
-    }
-    /* ซ่อน Header และ Footer มาตรฐานของ Streamlit ให้ดูคลีนขึ้น */
+    /* ซ่อน Header และ Footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -139,11 +130,10 @@ else:
 
 current_messages = active_char_data["messages"]
 
-# แสดงหัวข้อห้องแชทปัจจุบันพร้อมไอคอน
 st.markdown(f"### 💬 กำลังคุยกับ: `{st.session_state.current_char}`")
 st.divider()
 
-# แสดงประวัติแชทพร้อม Avatar สุดน่ารัก
+# แสดงประวัติแชท (ใช้ฟังก์ชันมาตรฐานของ Streamlit เพื่อให้อ่านง่ายและไม่เพี้ยนใน Dark Mode)
 for message in current_messages:
   if message["role"] == "user":
     with st.chat_message("user", avatar="👤"):
