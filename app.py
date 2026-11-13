@@ -45,11 +45,12 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมรองรับฟิลด์ Persona ละเอียด
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบอัปเดตโครงสร้างอัตโนมัติป้องกัน Error
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
+  # ตารางผู้ใช้งานระบบ
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -81,6 +82,7 @@ def init_db():
   if "call_desc" not in columns:
     cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
 
+  # ตัวละครหลัก
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -92,6 +94,7 @@ def init_db():
         )
     """)
 
+  # ตัวละครเสริม
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,6 +107,7 @@ def init_db():
         )
     """)
 
+  # สถานะความสัมพันธ์ (รองรับระบบแยกยูสเซอร์)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_status (
             username TEXT,
@@ -114,6 +118,18 @@ def init_db():
         )
     """)
 
+  # ตรวจสอบคอลัมน์ username ใน character_status (กรณีฐานข้อมูลเดิมไม่มี)
+  cursor.execute("PRAGMA table_info(character_status)")
+  status_cols = [col[1] for col in cursor.fetchall()]
+  if "username" not in status_cols:
+    try:
+      cursor.execute(
+          "ALTER TABLE character_status ADD COLUMN username TEXT DEFAULT 'admin'"
+      )
+    except Exception:
+      pass
+
+  # ภารกิจส่วนกลาง
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +139,7 @@ def init_db():
         )
     """)
 
+  # สถานะการทำภารกิจสำเร็จของแต่ละยูสเซอร์
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_quests (
             username TEXT,
@@ -132,6 +149,7 @@ def init_db():
         )
     """)
 
+  # คลังรูปภาพ
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,6 +158,7 @@ def init_db():
         )
     """)
 
+  # ประวัติแชท
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,6 +169,17 @@ def init_db():
             image_blob BLOB
         )
     """)
+
+  cursor.execute("PRAGMA table_info(messages)")
+  msg_cols = [col[1] for col in cursor.fetchall()]
+  if "username" not in msg_cols:
+    try:
+      cursor.execute(
+          "ALTER TABLE messages ADD COLUMN username TEXT DEFAULT 'admin'"
+      )
+    except Exception:
+      pass
+
   conn.commit()
   return conn
 
