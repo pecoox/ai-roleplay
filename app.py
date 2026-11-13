@@ -8,8 +8,8 @@ import random
 import json
 
 st.set_page_config(
-    page_title="AI Roleplay - Affection & Quests Studio",
-    page_icon="💖",
+    page_title="AI Roleplay - Advanced Quests Studio",
+    page_icon="🎯",
     layout="centered",
 )
 
@@ -41,7 +41,7 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite รองรับระบบความชอบและภารกิจ
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite รองรับระบบความชอบและภารกิจแบบไม่จำกัด
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -58,7 +58,6 @@ def init_db():
         )
     """)
 
-  # ตารางเก็บสถานะความสัมพันธ์และความชอบของผู้ใช้กับตัวละครแต่ละตัว
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_status (
             char_name TEXT PRIMARY KEY,
@@ -67,7 +66,6 @@ def init_db():
         )
     """)
 
-  # ตารางเก็บภารกิจ (Quests)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,59 +100,7 @@ def init_db():
 conn = init_db()
 cursor = conn.cursor()
 
-# ตรวจสอบตัวละครเริ่มต้น (มาร์ค ต้วน)
-cursor.execute("SELECT COUNT(*) FROM characters")
-if cursor.fetchone()[0] == 0:
-  cursor.execute(
-      """
-        INSERT INTO characters (name, prompt, personality, lore, supporting, first_message, avatar) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """,
-      (
-          "มาร์ค ต้วน",
-          "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่มตัวจริง",
-          "อบอุ่น เป็นกันเอง ขี้เล่น และใส่ใจแฟนคลับ",
-          "เป็นคนแปลกหน้าที่เพิ่งบังเอิญเจอกันที่ร้านกาแฟ",
-          "ผู้จัดการส่วนตัว",
-          "อ้าว... ขอโทษทีครับ เดินชนเมื่อกี้เจ็บตรงไหนหรือเปล่าครับ? (มองหน้าด้วยความสงสัยนิดๆ)",
-          None,
-      ),
-  )
-  # เพิ่มสถานะความชอบเริ่มต้น
-  cursor.execute(
-      """
-        INSERT OR IGNORE INTO character_status (char_name, affection_score, relationship_level) 
-        VALUES (?, ?, ?)
-    """,
-      ("มาร์ค ต้วน", 5, "คนแปลกหน้า"),
-  )
-
-  # เพิ่มภารกิจเริ่มต้น
-  cursor.execute(
-      """
-        INSERT INTO quests (char_name, task_desc, is_completed, reward_points) 
-        VALUES (?, ?, ?, ?)
-    """,
-      (
-          "มาร์ค ต้วน",
-          "แนะนำตัวให้เขารู้จักอย่างเป็นทางการ",
-          0,
-          15,
-      ),
-  )
-  cursor.execute(
-      """
-        INSERT INTO quests (char_name, task_desc, is_completed, reward_points) 
-        VALUES (?, ?, ?, ?)
-    """,
-      (
-          "มาร์ค ต้วน",
-          "ทำให้เขายิ้มหรือหัวเราะออกมาให้ได้",
-          0,
-          20,
-      ),
-  )
-  conn.commit()
+# ❌ นำตัวละครเริ่มต้น (มาร์ค ต้วน) ออกไปแล้ว ระบบจะปล่อยว่างไว้ให้คุณสร้างตัวละครใหม่เอง
 
 # ดึง API Key
 try:
@@ -169,10 +115,15 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 model_name = "gemini-3.5-flash-lite"
 
-if "current_char" not in st.session_state:
-  cursor.execute("SELECT name FROM characters LIMIT 1")
-  row = cursor.fetchone()
-  st.session_state.current_char = row[0] if row else "มาร์ค ต้วน"
+# ตรวจสอบตัวละครปัจจุบัน
+cursor.execute("SELECT name FROM characters")
+all_chars = [row[0] for row in cursor.fetchall()]
+
+if "current_char" not in st.session_state or st.session_state.current_char not in all_chars:
+  if all_chars:
+    st.session_state.current_char = all_chars[0]
+  else:
+    st.session_state.current_char = None
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
@@ -184,20 +135,19 @@ with st.sidebar:
   st.divider()
   st.markdown("### 🛠️ สร้างตัวละครใหม่")
 
-  with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=False):
-    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น อาจารย์หนุ่ม, เพื่อนร่วมงาน...")
+  # เปิดฟอร์มสร้างตัวละครแบบบังคับเปิด (Expanded=True) ถ้ายังไม่มีตัวละครในระบบ
+  is_form_expanded = len(all_chars) == 0
+
+  with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=is_form_expanded):
+    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น อาจารย์หนุ่ม...")
     new_prompt = st.text_area(
-        "คาแรคเตอร์หลัก (Prompt):",
-        placeholder="คุณคือ...",
-        height=60,
+        "คาแรคเตอร์หลัก (Prompt):", placeholder="คุณคือ...", height=60
     )
     new_personality = st.text_area(
-        "🧠 บุคลิก/นิสัย:",
-        placeholder="เช่น เข้มงวด, เป็นกันเอง, สุภาพ...",
-        height=60,
+        "🧠 บุคลิก/นิสัย:", placeholder="เข้มงวด, เป็นกันเอง...", height=60
     )
     new_lore = st.text_area(
-        "📖 เรื่องราวพื้นหลัง (Background/Lore):",
+        "📖 เรื่องราวพื้นหลัง (Lore):",
         placeholder="สถานะเริ่มต้น ความสัมพันธ์...",
         height=70,
     )
@@ -205,9 +155,7 @@ with st.sidebar:
         "👥 ตัวละครสนับสนุน:", placeholder="คนรอบข้าง...", height=60
     )
     new_first_msg = st.text_area(
-        "💬 ข้อความแรก (Greeting Message):",
-        placeholder="ประโยคแรกที่ทักทาย...",
-        height=60,
+        "💬 ข้อความแรก:", placeholder="ประโยคแรกที่ทักทาย...", height=60
     )
     new_avatar = st.file_uploader(
         "รูปโปรไฟล์ตัวละคร",
@@ -215,15 +163,10 @@ with st.sidebar:
         key="new_avatar_up",
     )
 
-    # ช่องใส่ภารกิจเริ่มต้นตอนสร้างตัวละคร
     st.markdown("---")
-    st.markdown("**🎯 กำหนดภารกิจเริ่มต้น (2 ภารกิจ)**")
-    q1 = st.text_input(
-        "ภารกิจที่ 1:", placeholder="เช่น ทักทายเขาอย่างสุภาพ"
-    )
-    q2 = st.text_input(
-        "ภารกิจที่ 2:", placeholder="เช่น ชวนคุยเรื่องงานหรือเรื่องทั่วไป"
-    )
+    st.markdown("**🎯 ภารกิจเริ่มต้น**")
+    q1 = st.text_input("ภารกิจที่ 1:", placeholder="เช่น ทักทายเขาอย่างสุภาพ")
+    q2 = st.text_input("ภารกิจที่ 2:", placeholder="เช่น ชวนคุยเรื่องทั่วไป")
 
     if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
       if new_name and new_prompt:
@@ -253,8 +196,6 @@ with st.sidebar:
                   avatar_bytes,
               ),
           )
-
-          # สร้างสถานะความชอบเริ่มต้น
           cursor.execute(
               """
                 INSERT INTO character_status (char_name, affection_score, relationship_level) 
@@ -263,7 +204,6 @@ with st.sidebar:
               (new_name, 0, "คนแปลกหน้า"),
           )
 
-          # บันทึกภารกิจ
           if q1:
             cursor.execute(
                 "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, 15)",
@@ -280,7 +220,6 @@ with st.sidebar:
               " VALUES (?, ?, ?, ?)",
               (new_name, "assistant", default_first_msg, None),
           )
-
           conn.commit()
           st.session_state.current_char = new_name
           st.success(f"สร้าง '{new_name}' สำเร็จ!")
@@ -291,60 +230,75 @@ with st.sidebar:
         st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
   st.divider()
-  st.subheader("👥 เลือกตัวละคร")
-  cursor.execute("SELECT name FROM characters")
-  char_list = [row[0] for row in cursor.fetchall()]
-
-  if st.session_state.current_char not in char_list and char_list:
-    st.session_state.current_char = char_list[0]
-
-  selected_char = st.selectbox(
-      "สลับแชทกับ:",
-      char_list,
-      index=(
-          char_list.index(st.session_state.current_char)
-          if st.session_state.current_char in char_list
-          else 0
-      ),
-  )
-
-  if selected_char != st.session_state.current_char:
-    st.session_state.current_char = selected_char
-    st.rerun()
-
-  # คลังรูปภาพประจำตัวละคร
-  st.divider()
-  st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
-  gallery_key = f"gallery_upload_{st.session_state.current_char}"
-  uploaded_gallery_photos = st.file_uploader(
-      "อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)",
-      type=["png", "jpg", "jpeg", "webp"],
-      accept_multiple_files=True,
-      key=gallery_key,
-  )
-
-  if uploaded_gallery_photos:
-    cursor.execute(
-        "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
-        (st.session_state.current_char,),
+  
+  if all_chars:
+    st.subheader("👥 เลือกตัวละคร")
+    selected_char = st.selectbox(
+        "สลับแชทกับ:",
+        all_chars,
+        index=(
+            all_chars.index(st.session_state.current_char)
+            if st.session_state.current_char in all_chars
+            else 0
+        ),
     )
-    current_db_count = cursor.fetchone()[0]
 
-    if len(uploaded_gallery_photos) != current_db_count:
-      cursor.execute(
-          "DELETE FROM character_photos WHERE char_name = ?",
-          (st.session_state.current_char,),
-      )
-      for photo in uploaded_gallery_photos:
-        cursor.execute(
-            "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-            (st.session_state.current_char, photo.getvalue()),
-        )
-      conn.commit()
-      st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+    if selected_char != st.session_state.current_char:
+      st.session_state.current_char = selected_char
       st.rerun()
 
-  if len(char_list) > 1:
+    # 🎯 เมนูเพิ่มภารกิจใหม่ให้กับตัวละครปัจจุบัน
+    st.divider()
+    st.markdown(f"### 🎯 เพิ่มภารกิจให้: {st.session_state.current_char}")
+    with st.form("add_quest_form", clear_on_submit=True):
+      new_quest_desc = st.text_input(
+          "รายละเอียดภารกิจใหม่:", placeholder="เช่น ชวนไปกินกาแฟ..."
+      )
+      new_quest_pts = st.slider("คะแนนรางวัลที่จะได้รับ:", 5, 50, 15)
+      submit_quest = st.form_submit_button(
+          "➕ เพิ่มภารกิจนี้", use_container_width=True
+      )
+      if submit_quest and new_quest_desc:
+        cursor.execute(
+            "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, ?)",
+            (st.session_state.current_char, new_quest_desc, new_quest_pts),
+        )
+        conn.commit()
+        st.success("เพิ่มภารกิจสำเร็จ!")
+        st.rerun()
+
+    # คลังรูปภาพประจำตัวละคร
+    st.divider()
+    st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
+    gallery_key = f"gallery_upload_{st.session_state.current_char}"
+    uploaded_gallery_photos = st.file_uploader(
+        "อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key=gallery_key,
+    )
+
+    if uploaded_gallery_photos:
+      cursor.execute(
+          "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      current_db_count = cursor.fetchone()[0]
+
+      if len(uploaded_gallery_photos) != current_db_count:
+        cursor.execute(
+            "DELETE FROM character_photos WHERE char_name = ?",
+            (st.session_state.current_char,),
+        )
+        for photo in uploaded_gallery_photos:
+          cursor.execute(
+              "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+              (st.session_state.current_char, photo.getvalue()),
+          )
+        conn.commit()
+        st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+        st.rerun()
+
     st.divider()
     if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
       cursor.execute(
@@ -368,9 +322,17 @@ with st.sidebar:
           (st.session_state.current_char,),
       )
       conn.commit()
-      cursor.execute("SELECT name FROM characters LIMIT 1")
-      st.session_state.current_char = cursor.fetchone()[0]
+      
+      cursor.execute("SELECT name FROM characters")
+      remaining = [r[0] for r in cursor.fetchall()]
+      st.session_state.current_char = remaining[0] if remaining else None
       st.rerun()
+
+# ตรวจสอบว่ามีตัวละครในระบบไหม ถ้าไม่มีให้แสดงหน้าจอต้อนรับ
+if not st.session_state.current_char:
+  st.title("✨ AI Roleplay Studio")
+  st.info("👈 กรุณาเปิดเมนู **'📌 เปิดฟอร์มสร้างตัวละคร'** ในแถบด้านข้างซ้าย เพื่อสร้างตัวละครตัวแรกของคุณได้เลยครับ!")
+  st.stop()
 
 # ดึงข้อมูลตัวละครปัจจุบัน
 cursor.execute(
@@ -411,7 +373,6 @@ else:
   current_affection = status_row[0]
   current_rel_level = status_row[1]
 
-# คำสั่งระบบประเมินความชอบและภารกิจด้วย AI บังคับตอบเป็น JSON ด้านหลัง
 full_system_prompt = f"""
 {base_prompt}
 
@@ -425,7 +386,7 @@ full_system_prompt = f"""
 {char_supporting}
 
 [สถานะความสัมพันธ์ปัจจุบันกับผู้ใช้]: ระดับ "{current_rel_level}" (คะแนนความชอบ: {current_affection}/100)
-*คำสั่งพิเศษ*: คุณต้องสวมบทบาทตามระดับความสัมพันธ์นี้จริงๆ (เช่น ถ้าเป็นคนแปลกหน้า ให้มีความระแวง เป็นทางการ หรือเว้นระยะห่างตามคาแรคเตอร์ และเมื่อคะแนนเพิ่มขึ้น ความสัมพันธ์สามารถพัฒนาไปตามความเหมาะสมของคาแรคเตอร์ เช่น เพื่อนสนิท, ลูกศิษย์, คนรู้ใจ, คู่หู หรือคนรัก (ไม่จำเป็นต้องเป็นคนรักเสมอไป ให้ AI พิจารณาตามความเหมาะสมของคาแรคเตอร์))
+*คำสั่งพิเศษ*: ให้ประเมินสถานการณ์ว่าการคุยครั้งนี้ตรงกับเงื่อนไขภารกิจใดที่ยังค้างอยู่หรือไม่ หากตรง ให้ระบุหมายเลขไอดีภารกิจนั้นใน JSON ด้านล่างเพื่อปลดล็อก
 """
 
 if "นิยาย" in chat_mode:
@@ -435,7 +396,7 @@ if "นิยาย" in chat_mode:
       " ครอบการกระทำ)\n"
       "2. สวมบทบาท 100% ตามระดับความสัมพันธ์ปัจจุบัน ห้ามหลุดคาแรคเตอร์\n"
       "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-      '{"score_change": [ตัวเลขคะแนนที่จะบวกเพิ่ม เช่น 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จในตาราง หรือ null ถ้าไม่มีภารกิจไหนเสร็จ]}'
+      '{"score_change": [คะแนนที่จะบวกเพิ่ม 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
   )
   temp_val = 1.1
 else:
@@ -444,11 +405,10 @@ else:
       "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี ตามระดับความสัมพันธ์ปัจจุบัน\n"
       "2. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์\n"
       "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-      '{"score_change": [ตัวเลขคะแนนที่จะบวกเพิ่ม เช่น 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จในตาราง หรือ null ถ้าไม่มีภารกิจไหนเสร็จ]}'
+      '{"score_change": [คะแนนที่จะบวกเพิ่ม 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
   )
   temp_val = 0.9
 
-# ตรวจสอบข้อความแรก
 cursor.execute(
     "SELECT COUNT(*) FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
@@ -461,7 +421,6 @@ if cursor.fetchone()[0] == 0 and char_first_msg:
   )
   conn.commit()
 
-# ดึงข้อความแชท
 cursor.execute(
     "SELECT role, content, image_blob FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
@@ -472,10 +431,10 @@ for row in cursor.fetchall():
   if row[2]:
     img_obj = Image.open(io.BytesIO(row[2]))
   current_messages.append(
-      {"role": role[0], "content": row[1], "image": img_obj}
+      {"role": row[0], "content": row[1], "image": img_obj}
   )
 
-# --- ส่วนแสดงผลหน้าจอหลัก ---
+# --- หน้าจอหลัก ---
 col_av, col_title = st.columns([1, 6])
 with col_av:
   if char_avatar_img:
@@ -485,7 +444,7 @@ with col_av:
 with col_title:
   st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
 
-# 💖 แผงแสดงหลอดคะแนนความชอบและสถานะ
+# แผงแสดงหลอดคะแนนความชอบ
 st.markdown(
     f"""
     <div class="affection-box">
@@ -496,8 +455,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 🎯 ปุ่มกดดูภารกิจ (Quest Log) ในรูปแบบ Expander
-with st.expander("🎯 เปิดดูภารกิจที่ต้องทำ (Quest Log)", expanded=False):
+# ปุ่มกดดูภารกิจทั้งหมดที่มี
+with st.expander("🎯 เปิดดูภารกิจทั้งหมด (Quest Log)", expanded=False):
   cursor.execute(
       "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
       (st.session_state.current_char,),
@@ -505,10 +464,17 @@ with st.expander("🎯 เปิดดูภารกิจที่ต้อง
   quests = cursor.fetchall()
   if quests:
     for q_id, desc, completed, pts in quests:
-      status_icon = "✅ สำเร็จแล้ว" f"(+{pts} แต้ม)" if completed else "⏳ กำลังดำเนินการ"
-      st.markdown(f"- **[ภารกิจที่ {q_id}]** {desc} — *สถานะ: {status_icon}*")
+      if completed:
+        st.markdown(
+            f"- ✅ **[ภารกิจที่ {q_id}]** ~~{desc}~~ — *สำเร็จแล้ว (+{pts} แต้ม)*"
+        )
+      else:
+        st.markdown(
+            f"- ⏳ **[ภารกิจที่ {q_id}]** {desc} — *ยังไม่สำเร็จ (รางวัล: {pts}"
+            " แต้ม)*"
+        )
   else:
-    st.caption("ยังไม่มีภารกิจสำหรับตัวละครนี้")
+    st.caption("ยังไม่มีภารกิจสำหรับตัวละครนี้ สามารถเพิ่มได้จากเมนูด้านซ้ายครับ")
 
 st.divider()
 
@@ -568,7 +534,6 @@ if user_input := st.chat_input(
         response = chat.send_message(user_input)
         raw_text = response.text
 
-        # แยกส่วนข้อความแชทกับ JSON ประเมินผลคะแนน
         try:
           if "{" in raw_text and "}" in raw_text:
             parts = raw_text.rsplit("{", 1)
@@ -590,12 +555,27 @@ if user_input := st.chat_input(
               "quest_update": None,
           }
 
-        # อัปเดตคะแนนความชอบลงฐานข้อมูล
         score_inc = eval_data.get("score_change", 3)
         new_lvl = eval_data.get("new_level", current_rel_level)
         completed_q_id = eval_data.get("quest_update", None)
 
-        updated_score = min(100, current_affection + score_inc)
+        quest_bonus = 0
+        if completed_q_id:
+          cursor.execute(
+              "SELECT is_completed, reward_points FROM quests WHERE id = ? AND char_name = ?",
+              (completed_q_id, st.session_state.current_char),
+          )
+          q_row = cursor.fetchone()
+          if q_row and q_row[0] == 0:
+            quest_bonus = q_row[1]
+            cursor.execute(
+                "UPDATE quests SET is_completed = 1 WHERE id = ?",
+                (completed_q_id,),
+            )
+
+        updated_score = min(
+            100, current_affection + score_inc + quest_bonus
+        )
 
         cursor.execute(
             """
@@ -605,21 +585,9 @@ if user_input := st.chat_input(
         """,
             (updated_score, new_lvl, st.session_state.current_char),
         )
-
-        # ถ้ามีภารกิจสำเร็จ
-        if completed_q_id:
-          cursor.execute(
-              """
-                UPDATE quests 
-                SET is_completed = 1 
-                WHERE id = ? AND char_name = ?
-            """,
-              (completed_q_id, st.session_state.current_char),
-          )
-
         conn.commit()
 
-        # สุ่มรูปภาพจากคลัง (30%)
+        # สุ่มรูปจากคลัง (30%)
         cursor.execute(
             "SELECT photo FROM character_photos WHERE char_name = ?",
             (st.session_state.current_char,),
