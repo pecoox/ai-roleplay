@@ -7,6 +7,9 @@ import io
 import random
 import json
 import hashlib
+import urllib.request
+import urllib.error
+from bs4 import BeautifulSoup
 
 st.set_page_config(
     page_title="AI Roleplay - Universe & Character Hub",
@@ -608,13 +611,13 @@ with st.sidebar:
   elif is_current_admin and sidebar_action == "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI":
     st.markdown("### 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์")
     st.caption(
-        "วางลิงก์เว็บไซต์ (เช่น Wikipedia, Fandom, แหล่งข้อมูลประวัติ) แล้วให้ AI ดึงข้อมูลมาสร้างตัวละครให้อัตโนมัติ!"
+        "วางลิงก์เว็บไซต์ แล้วให้ AI ดึงข้อมูลเนื้อหามาวิเคราะห์สร้างตัวละครให้อัตโนมัติ!"
     )
 
     with st.form("web_scrape_char_form"):
       web_url = st.text_input(
           "ลิงก์เว็บไซต์ (URL):",
-          placeholder="https://en.wikipedia.org/wiki/...",
+          placeholder="https://www.lovecube.ai/?character=...",
       )
       web_submit_btn = st.form_submit_button(
           "🚀 ดึงข้อมูลและสร้างตัวละคร", use_container_width=True
@@ -625,18 +628,33 @@ with st.sidebar:
             f"กำลังดึงข้อมูลและให้ AI วิเคราะห์เนื้อหาจาก {web_url}..."
         ):
           try:
-            # ใช้ Google Search tool เพื่อช่วยค้นหาและดึงเนื้อหาจาก URL ที่ผู้ใช้ระบุ
-            search_prompt = f"โปรดดึงข้อมูล สรุปประวัติ คาแรคเตอร์ นิสัย และความสัมพันธ์จากเว็บไซต์นี้: {web_url}"
-            # ทำการค้นหาข้อมูลเว็บผ่าน google_search เพื่อให้ AI ได้เนื้อหาล่าสุดมาประมวลผล
-            search_result = google_search(queries=[web_url, search_prompt])
+            # ดึงเนื้อหา HTML จากเว็บ
+            req = urllib.request.Request(
+                web_url, headers={"User-Agent": "Mozilla/5.0"}
+            )
+            html_content = ""
+            try:
+              with urllib.request.urlopen(req, timeout=10) as response:
+                html_content = response.read().decode("utf-8", errors="ignore")
+            except Exception:
+              html_content = (
+                  "ไม่สามารถดึงข้อมูลดิบจากเว็บได้โดยตรง แต่ลิงก์คือ: " + web_url
+              )
+
+            # ใช้ BeautifulSoup กวาดเอาเฉพาะข้อความตัวหนังสือ
+            soup = BeautifulSoup(html_content, "html.parser")
+            for script in soup(["script", "style"]):
+              script.decompose()
+            text_data = soup.get_text(separator=" ", strip=True)[:15000]
 
             prompt_gen = (
-                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลจากเว็บให้เป็นข้อมูล Roleplay\n"
-                f"ข้อมูลดิบที่ค้นหาจากเว็บสำหรับลิงก์ {web_url}: {search_result}\n\n"
+                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลเว็บให้เป็นตัวละคร Roleplay\n"
+                f"ลิงก์เว็บ: {web_url}\n"
+                f"เนื้อหาที่ดึงมาได้: {text_data}\n\n"
                 f"กรุณาสรุปและสร้างข้อมูลตัวละครในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
                 "{\n"
                 '  "name": "ชื่อตัวละคร",\n'
-                '  "prompt": "คาแรคเตอร์หลักและบทบาทจากข้อมูลเว็บ",\n'
+                '  "prompt": "คาแรคเตอร์หลักและบทบาทจากเนื้อหาเว็บ",\n'
                 '  "personality": "บุคลิกและนิสัยใจคอ",\n'
                 '  "lore": "เรื่องราวพื้นหลัง",\n'
                 '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2"],\n'
@@ -710,7 +728,7 @@ with st.sidebar:
                   "ไม่สามารถแปลงข้อมูลจากเว็บไซต์ได้ กรุณาลองใหม่อีกครั้งหรือตรวจสอบลิงก์"
               )
           except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+            st.error(f"เกิดข้อผิดพลาดในการดึงเว็บ: {e}")
 
   # 1. สร้างตัวละครหลักใหม่ (Manual)
   elif is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่ (Manual)":
