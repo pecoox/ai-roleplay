@@ -630,7 +630,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ห้องแชท (ปรับระบบ Prompt ให้กระชับ ตอบไวเท่ากันทุกยูสเซอร์)
+# 💬 ห้องแชท
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -672,7 +672,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
   )
 
-  # ⚡ ปรับ System Prompt ให้สั้นกระชับเพื่อความเร็วสูงสุด
   roleplay_instruction = f"""
 {base_prompt}
 - นิสัย: {char_personality}
@@ -688,6 +687,7 @@ if st.session_state.in_chat and st.session_state.current_char:
 {{"score_change": [ตัวเลขเช่น 5 หรือ -2], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [ไอดีภารกิจหรือ null]}}
 """
 
+
   def get_random_first_msg(raw_json, char_name):
     try:
       msgs = json.loads(raw_json)
@@ -696,6 +696,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     except Exception:
       pass
     return f"สวัสดีครับ ฉันชื่อ {char_name}"
+
 
   cursor.execute(
       "SELECT COUNT(*) FROM messages WHERE username = ? AND char_name = ?",
@@ -711,7 +712,6 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
     conn.commit()
 
-  # โหลดประวัติแชทล่าสุด 15 ข้อความ
   cursor.execute(
       """
       SELECT role, content, image_blob FROM (
@@ -819,32 +819,43 @@ if st.session_state.in_chat and st.session_state.current_char:
       message_placeholder = st.empty()
       message_placeholder.markdown("กำลังพิมพ์...")
 
-      try:
-        formatted_history = [
-            {
-                "role": "user" if m["role"] == "user" else "model",
-                "parts": [{"text": m["content"]}],
-            }
-            for m in current_messages
-        ]
+      bot_response = None
+      eval_data = {}
+      max_retries = 3
 
-        chat = client.chats.create(
-            model=model_name,
-            history=formatted_history if formatted_history else None,
-            config={
-                "system_instruction": roleplay_instruction,
-                "temperature": 1.1,
-            },
-        )
-
-        response = chat.send_message(user_input)
-        raw_text = response.text
-
+      for attempt in range(max_retries):
         try:
+          formatted_history = [
+              {
+                  "role": "user" if m["role"] == "user" else "model",
+                  "parts": [{"text": m["content"]}],
+              }
+              for m in current_messages
+          ]
+
+          chat = client.chats.create(
+              model=model_name,
+              history=formatted_history if formatted_history else None,
+              config={
+                  "system_instruction": roleplay_instruction,
+                  "temperature": 1.1,
+              },
+          )
+
+          response = chat.send_message(user_input)
+          raw_text = response.text
+
           if "{" in raw_text and "}" in raw_text:
             parts = raw_text.rsplit("{", 1)
             bot_response = parts[0].strip()
-            eval_data = json.loads("{" + parts[1])
+            try:
+              eval_data = json.loads("{" + parts[1])
+            except Exception:
+              eval_data = {
+                  "score_change": 2,
+                  "new_level": current_rel_level,
+                  "quest_update": None,
+              }
           else:
             bot_response = raw_text
             eval_data = {
@@ -852,14 +863,23 @@ if st.session_state.in_chat and st.session_state.current_char:
                 "new_level": current_rel_level,
                 "quest_update": None,
             }
-        except Exception:
-          bot_response = raw_text
-          eval_data = {
-              "score_change": 2,
-              "new_level": current_rel_level,
-              "quest_update": None,
-          }
+          break
 
+        except Exception as e:
+          if attempt < max_retries - 1:
+            message_placeholder.markdown(
+                f"⚠️ กำลังเชื่อมต่อใหม่ครั้งที่ {attempt + 2}..."
+            )
+            time.sleep(1.5)
+          else:
+            bot_response = f"ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ: `{str(e)}`"
+            eval_data = {
+                "score_change": 0,
+                "new_level": current_rel_level,
+                "quest_update": None,
+            }
+
+      if bot_response:
         score_change = eval_data.get("score_change", 0)
         new_lvl = eval_data.get("new_level", current_rel_level)
         completed_q_id = eval_data.get("quest_update", None)
@@ -897,7 +917,6 @@ if st.session_state.in_chat and st.session_state.current_char:
             ),
         )
 
-        # สุ่มรูปภาพ
         attached_photo_bytes = None
         cursor.execute(
             "SELECT photo FROM character_photos WHERE char_name = ?",
@@ -922,8 +941,3 @@ if st.session_state.in_chat and st.session_state.current_char:
         )
         conn.commit()
         st.rerun()
-
-      except Exception:
-        message_placeholder.markdown(
-            "ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง"
-        )
