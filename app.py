@@ -45,16 +45,17 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite (รองรับระบบ Users และแยกแชทตาม User)
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # ตารางผู้ใช้งานระบบ
+  # ตารางผู้ใช้งานระบบ (เพิ่มคอลัมน์ is_admin)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
-            password TEXT
+            password TEXT,
+            is_admin INTEGER DEFAULT 0
         )
     """)
 
@@ -94,7 +95,7 @@ def init_db():
         )
     """)
 
-  # ภารกิจส่วนกลาง (หรือแยกตามยูสเซอร์ สามารถกำหนดได้)
+  # ภารกิจส่วนกลาง
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +156,6 @@ client = genai.Client(api_key=api_key)
 model_name = "gemini-3.5-flash-lite"
 
 
-# ฟังก์ชันเข้ารหัสรหัสผ่าน
 def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
@@ -165,6 +165,8 @@ if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 if "username" not in st.session_state:
   st.session_state.username = ""
+if "is_admin" not in st.session_state:
+  st.session_state.is_admin = False
 
 # ==========================================
 # 🔐 หน้าจอเข้าสู่ระบบ / สมัครสมาชิก (Login / Register)
@@ -184,12 +186,14 @@ if not st.session_state.logged_in:
       if l_submit:
         if l_user and l_pass:
           cursor.execute(
-              "SELECT password FROM users WHERE username = ?", (l_user,)
+              "SELECT password, is_admin FROM users WHERE username = ?",
+              (l_user,),
           )
           row = cursor.fetchone()
           if row and row[0] == hash_password(l_pass):
             st.session_state.logged_in = True
             st.session_state.username = l_user
+            st.session_state.is_admin = bool(row[1])
             st.success("เข้าสู่ระบบสำเร็จ!")
             st.rerun()
           else:
@@ -211,12 +215,25 @@ if not st.session_state.logged_in:
           if cursor.fetchone():
             st.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
           else:
+            # เช็คว่ามีผู้ใช้คนแรกในระบบไหม ถ้ายังไม่มีให้คนแรกเป็น Admin อัตโนมัติ
+            cursor.execute("SELECT COUNT(*) FROM users")
+            user_count = cursor.fetchone()[0]
+            assigned_admin = 1 if user_count == 0 else 0
+
             cursor.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (r_user, hash_password(r_pass)),
+                "INSERT INTO users (username, password, is_admin) VALUES (?, ?,"
+                " ?)",
+                (r_user, hash_password(r_pass), assigned_admin),
             )
             conn.commit()
-            st.success("สมัครสมาชิกสำเร็จ! กรุณากดไปที่แท็บ 'เข้าสู่ระบบ'")
+            if assigned_admin:
+              st.success(
+                  "สมัครสมาชิกสำเร็จ! (คุณได้รับสิทธิ์เป็น Admin อัตโนมัติเพราะเป็นบัญชีแรก)"
+              )
+            else:
+              st.success(
+                  "สมัครสมาชิกสำเร็จ! กรุณากดไปที่แท็บ 'เข้าสู่ระบบ'"
+              )
         else:
           st.warning("กรุณากรอกข้อมูลให้ครบถ้วน")
   st.stop()
@@ -226,6 +243,7 @@ if not st.session_state.logged_in:
 # 🌟 ระบบหลักหลังเข้าสู่ระบบแล้ว
 # ==========================================
 current_user = st.session_state.username
+is_current_admin = st.session_state.is_admin
 
 # ดึงรายชื่อตัวละครส่วนกลางทั้งหมด
 cursor.execute("SELECT name FROM characters")
@@ -243,9 +261,15 @@ if (
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
   st.markdown(f"👤 **ผู้ใช้งาน:** `{current_user}`")
+  if is_current_admin:
+    st.markdown("🛡️ **สถานะ:** `ผู้ดูแลระบบ (Admin)`")
+  else:
+    st.markdown("👤 **สถานะ:** `ผู้ใช้งานทั่วไป (User)`")
+
   if st.button("🚪 ออกจากระบบ", use_container_width=True):
     st.session_state.logged_in = False
     st.session_state.username = ""
+    st.session_state.is_admin = False
     st.session_state.in_chat = False
     st.rerun()
 
@@ -261,18 +285,23 @@ with st.sidebar:
   )
 
   st.divider()
-  st.markdown("### 🛠️ จัดการระบบตัวละคร (ส่วนกลาง)")
 
-  sidebar_action = st.selectbox(
-      "เลือกการจัดการ:",
-      [
-          "➕ สร้างตัวละครหลักใหม่",
-          "✏️ แก้ไขข้อมูลตัวละครหลัก",
-          "👥 จัดการตัวละครเสริม",
-          "🎯 จัดการภารกิจ (Quest Log)",
-          "🖼️ จัดการคลังรูปภาพ",
-      ],
-  )
+  # 🛠️ เมนูจัดการระบบ (จำกัดสิทธิ์เฉพาะ Admin เท่านั้น)
+  if is_current_admin:
+    st.markdown("### 🛠️ จัดการระบบตัวละคร (Admin Only)")
+    sidebar_action = st.selectbox(
+        "เลือกการจัดการ:",
+        [
+            "➕ สร้างตัวละครหลักใหม่",
+            "✏️ แก้ไขข้อมูลตัวละครหลัก",
+            "👥 จัดการตัวละครเสริม",
+            "🎯 จัดการภารกิจ (Quest Log)",
+            "🖼️ จัดการคลังรูปภาพ",
+        ],
+    )
+  else:
+    st.markdown("### 📌 เมนูผู้ใช้งาน")
+    sidebar_action = "เลือกตัวละคร"
 
   if all_chars and sidebar_action != "➕ สร้างตัวละครหลักใหม่":
     st.divider()
@@ -293,8 +322,8 @@ with st.sidebar:
 
   st.divider()
 
-  # 1. สร้างตัวละครหลักใหม่
-  if sidebar_action == "➕ สร้างตัวละครหลักใหม่":
+  # 1. สร้างตัวละครหลักใหม่ (Admin Only)
+  if is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่":
     st.markdown("### 📌 สร้างตัวละครหลัก")
     with st.form("create_char_form"):
       new_name = st.text_input(
@@ -368,9 +397,10 @@ with st.sidebar:
         else:
           st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
-  # 2. แก้ไขข้อมูลตัวละครหลัก
+  # 2. แก้ไขข้อมูลตัวละครหลัก (Admin Only)
   elif (
-      sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก"
+      is_current_admin
+      and sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก"
       and st.session_state.current_char
   ):
     st.markdown(f"### ✏️ แก้ไข: {st.session_state.current_char}")
@@ -476,9 +506,11 @@ with st.sidebar:
         st.session_state.current_char = remaining[0] if remaining else None
         st.rerun()
 
-  # 3. จัดการตัวละครเสริม
+  # 3. จัดการตัวละครเสริม (Admin Only)
   elif (
-      sidebar_action == "👥 จัดการตัวละครเสริม" and st.session_state.current_char
+      is_current_admin
+      and sidebar_action == "👥 จัดการตัวละครเสริม"
+      and st.session_state.current_char
   ):
     st.markdown(f"### 👥 ตัวละครเสริม: {st.session_state.current_char}")
     sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม"])
@@ -604,9 +636,10 @@ with st.sidebar:
       else:
         st.caption("ยังไม่มีตัวละครเสริมในเรื่องนี้")
 
-  # 4. จัดการภารกิจ
+  # 4. จัดการภารกิจ (Admin Only)
   elif (
-      sidebar_action == "🎯 จัดการภารกิจ (Quest Log)"
+      is_current_admin
+      and sidebar_action == "🎯 จัดการภารกิจ (Quest Log)"
       and st.session_state.current_char
   ):
     st.markdown(f"### 🎯 จัดการภารกิจ: {st.session_state.current_char}")
@@ -646,9 +679,10 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีภารกิจในระบบ")
 
-  # 5. จัดการคลังรูปภาพ
+  # 5. จัดการคลังรูปภาพ (Admin Only)
   elif (
-      sidebar_action == "🖼️ จัดการคลังรูปภาพ"
+      is_current_admin
+      and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
       and st.session_state.current_char
   ):
     st.markdown(f"### 🖼️ คลังรูป: {st.session_state.current_char}")
@@ -700,8 +734,10 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีรูปภาพในคลัง")
 
-  if not all_chars and sidebar_action != "➕ สร้างตัวละครหลักใหม่":
-    st.info("กรุณาสร้างตัวละครหลักตัวแรกก่อนครับ")
+  if not all_chars and (
+      not is_current_admin or sidebar_action != "➕ สร้างตัวละครหลักใหม่"
+  ):
+    st.info("ยังไม่มีตัวละครหลักในระบบ กรุณาให้ Admin สร้างตัวละครก่อนครับ")
 
 
 # ==========================================
@@ -715,9 +751,7 @@ if not st.session_state.in_chat:
   st.divider()
 
   if not all_chars:
-    st.info(
-        "📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครใหม่ผ่านเมนูด้านซ้ายครับ!"
-    )
+    st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาเข้าสู่ระบบด้วยบัญชี Admin เพื่อสร้างตัวละครหลักครับ!")
   else:
     cols = st.columns(3)
     for idx, c_name in enumerate(all_chars):
@@ -856,7 +890,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   else:
     supporting_text = "ไม่มีตัวละครเสริมพิเศษ"
 
-  # ดึงสถานะความชอบแยกตาม username และ char_name
   cursor.execute(
       "SELECT affection_score, relationship_level FROM character_status WHERE username = ? AND char_name = ?",
       (current_user, st.session_state.current_char),
@@ -926,7 +959,6 @@ if st.session_state.in_chat and st.session_state.current_char:
     return f"สวัสดีครับ ฉันชื่อ {char_name}"
 
 
-  # ตรวจสอบประวัติแชทเฉพาะของยูสเซอร์นี้
   cursor.execute(
       "SELECT COUNT(*) FROM messages WHERE username = ? AND char_name = ?",
       (current_user, st.session_state.current_char),
@@ -955,7 +987,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มรีเซ็ตแชทส่วนตัว
   col_av, col_title, col_reset = st.columns([1, 6, 2])
   with col_av:
     if char_avatar_img:
