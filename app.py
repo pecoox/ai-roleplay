@@ -31,12 +31,11 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite ตรวจสอบและสร้างตารางรวมถึงอัปเดตคอลัมน์อัตโนมัติ
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # 1. ตารางตัวละคร
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -45,13 +44,11 @@ def init_db():
             avatar BLOB
         )
     """)
-  # อัปเดตคอลัมน์ lore เผื่อฐานข้อมูลเก่าไม่มี
   cursor.execute("PRAGMA table_info(characters)")
   char_columns = [col[1] for col in cursor.fetchall()]
   if "lore" not in char_columns:
     cursor.execute("ALTER TABLE characters ADD COLUMN lore TEXT")
 
-  # 2. ตารางคลังรูปภาพตัวละคร
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +57,6 @@ def init_db():
         )
     """)
 
-  # 3. ตารางประวัติแชท
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +66,6 @@ def init_db():
             image_blob BLOB
         )
     """)
-  # อัปเดตคอลัมน์ image_blob เผื่อฐานข้อมูลเก่าไม่มี
   cursor.execute("PRAGMA table_info(messages)")
   msg_columns = [col[1] for col in cursor.fetchall()]
   if "image_blob" not in msg_columns:
@@ -143,7 +138,10 @@ with st.sidebar:
         placeholder="เนื้อเรื่องย่อ ความสัมพันธ์...",
         height=70,
     )
-    new_avatar = st.file_uploader("รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg"])
+    # 🖼️ เพิ่ม 'webp' ให้รองรับการอัปโหลดไฟล์รูปภาพทุกตระกูล
+    new_avatar = st.file_uploader(
+        "รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg", "webp"]
+    )
 
     if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
       if new_name and new_prompt:
@@ -187,12 +185,12 @@ with st.sidebar:
     st.session_state.current_char = selected_char
     st.rerun()
 
-  # คลังรูปภาพของตัวละคร
+  # คลังรูปภาพของตัวละคร (รองรับ webp เช่นกัน)
   st.divider()
   st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
   uploaded_gallery_photos = st.file_uploader(
       "อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)",
-      type=["png", "jpg", "jpeg"],
+      type=["png", "jpg", "jpeg", "webp"],
       accept_multiple_files=True,
       key="gallery_upload",
   )
