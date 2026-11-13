@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียมและสไตล์การ์ดตัวละครแบบ Modern Grid
+# 🎨 ดีไซน์ CSS พรีเมียม
 st.markdown(
     """
     <style>
@@ -234,7 +234,7 @@ with st.sidebar:
       else:
         st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
-  # 👉 นำส่วน "เพิ่มภารกิจ" และ "คลังรูปภาพ" กลับมาไว้รวมกันตรงนี้ ให้อยู่ใต้ฟอร์มสร้าง/เลือกตัวละครหลักเสมอ
+  # ส่วนจัดการภารกิจและคลังรูปภาพใน Sidebar
   if all_chars:
     st.divider()
     st.subheader("👥 เลือกตัวละครหลัก")
@@ -254,7 +254,6 @@ with st.sidebar:
     ):
       st.session_state.current_char = selected_char
 
-    # 🎯 1. ช่องเพิ่มภารกิจ (แสดงตลอดเวลาใน Sidebar)
     st.markdown(f"### 🎯 เพิ่มภารกิจให้: `{st.session_state.current_char}`")
     with st.form("add_quest_form_sidebar", clear_on_submit=True):
       new_quest_desc = st.text_input(
@@ -273,7 +272,6 @@ with st.sidebar:
         st.success("เพิ่มภารกิจสำเร็จ!")
         st.rerun()
 
-    # 🖼️ 2. คลังรูปภาพของตัวละคร (แสดงตลอดเวลาใน Sidebar)
     st.markdown(f"### 🖼️ คลังรูปของ: `{st.session_state.current_char}`")
     st.caption("อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)")
     gallery_key = f"gallery_upload_{st.session_state.current_char}"
@@ -367,12 +365,11 @@ if not st.session_state.in_chat:
         with st.container(border=True):
           if c_avatar_blob:
             img = Image.open(io.BytesIO(c_avatar_blob))
-            st.image(img, use_container_width=True, height=180)
+            st.image(img, use_container_width=True)
           else:
             st.image(
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
                 use_container_width=True,
-                height=180,
             )
 
           st.markdown(f"### 🌟 {c_name}")
@@ -678,7 +675,7 @@ if st.session_state.in_chat and st.session_state.current_char:
           cursor.execute(
               """
               UPDATE character_status 
-              -SET affection_score = ?, relationship_level = ? 
+              SET affection_score = ?, relationship_level = ? 
               WHERE char_name = ?
           """,
               (updated_score, new_lvl, st.session_state.current_char),
