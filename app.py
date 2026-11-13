@@ -316,9 +316,8 @@ with st.sidebar:
 
   st.divider()
 
-  # 🎭 เมนูตั้งค่าบทบาทตัวตนของคุณ พร้อมฟังก์ชันสุ่ม/สร้างด้วย AI
+  # 🎭 เมนูตั้งค่าบทบาทตัวตนของคุณ พร้อมฟังก์ชันสร้างด้วย AI
   with st.expander("⚙️ ตั้งค่าบทบาทตัวตนของคุณ"):
-    # ปุ่มให้ AI สร้างบทบาทให้เข้ากับตัวละครปัจจุบัน
     if st.session_state.current_char:
       if st.button("✨ ให้ AI สร้างบทบาทให้เข้ากับเรื่องนี้", use_container_width=True):
         with st.spinner("AI กำลังสร้างบทบาทที่เหมาะสม..."):
@@ -466,6 +465,7 @@ with st.sidebar:
 
   st.divider()
 
+  # 1. สร้างตัวละครหลักใหม่ (Admin Only)
   if is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่":
     st.markdown("### 📌 สร้างตัวละครหลัก")
     with st.form("create_char_form"):
@@ -509,6 +509,7 @@ with st.sidebar:
           st.success("สำเร็จ!")
           st.rerun()
 
+  # 2. แก้ไขข้อมูลตัวละครหลัก (Admin Only)
   elif (
       is_current_admin
       and sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก"
@@ -570,85 +571,360 @@ with st.sidebar:
           st.success("อัปเดตสำเร็จ!")
           st.rerun()
 
+  # 3. จัดการตัวละครเสริม (Admin Only)
   elif (
       is_current_admin
       and sidebar_action == "👥 จัดการตัวละครเสริม"
       and st.session_state.current_char
   ):
-    sub_action = st.radio("เลือก:", ["➕ เพิ่ม", "🗑️ ลบ/แก้ไข"])
-    if sub_action == "➕ เพิ่ม":
-      with st.form("add_sub", clear_on_submit=True):
-        s_name = st.text_input("ชื่อตัวละครเสริม:")
-        s_prompt = st.text_area("คาแรคเตอร์:", height=60)
-        s_pers = st.text_area("บุคลิก:", height=60)
-        if st.form_submit_button("เพิ่ม", use_container_width=True) and s_name:
+    st.markdown(f"### 👥 ตัวละครเสริม: {st.session_state.current_char}")
+    sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม"])
+
+    if sub_action == "➕ เพิ่มตัวละครเสริม":
+      with st.form("add_sub_char_form", clear_on_submit=True):
+        sub_name = st.text_input("ชื่อตัวละครเสริม:")
+        sub_prompt = st.text_area("คาแรคเตอร์ตัวละครเสริม:", height=60)
+        sub_personality = st.text_area("🧠 บุคลิกตัวละครเสริม:", height=60)
+        sub_lore = st.text_area("📖 เรื่องราวพื้นหลัง:", height=60)
+        sub_avatar = st.file_uploader(
+            "รูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"]
+        )
+
+        if (
+            st.form_submit_button(
+                "➕ บันทึกตัวละครเสริม", use_container_width=True
+            )
+            and sub_name
+        ):
+          sub_avatar_bytes = (
+              sub_avatar.getvalue() if sub_avatar is not None else None
+          )
           cursor.execute(
-              "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality) VALUES (?, ?, ?, ?)",
-              (st.session_state.current_char, s_name, s_prompt, s_pers),
+              """
+                INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore, sub_avatar)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+              (
+                  st.session_state.current_char,
+                  sub_name,
+                  sub_prompt,
+                  sub_personality,
+                  sub_lore,
+                  sub_avatar_bytes,
+              ),
           )
           conn.commit()
-          st.success("สำเร็จ!")
+          st.success(f"เพิ่มตัวละครเสริม '{sub_name}' สำเร็จ!")
           st.rerun()
+    else:
+      cursor.execute(
+          "SELECT id, sub_name FROM supporting_characters WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      sub_list = cursor.fetchall()
+      if sub_list:
+        sub_dict = {s[1]: s[0] for s in sub_list}
+        selected_sub_name = st.selectbox(
+            "เลือกตัวละครเสริม:", list(sub_dict.keys())
+        )
+        selected_sub_id = sub_dict[selected_sub_name]
 
+        cursor.execute(
+            "SELECT sub_prompt, sub_personality, sub_lore, sub_avatar FROM supporting_characters WHERE id = ?",
+            (selected_sub_id,),
+        )
+        sub_data = cursor.fetchone()
+        if sub_data:
+          sp_prompt, sp_pers, sp_lore, sp_av = sub_data
+          with st.form(f"edit_sub_form_{selected_sub_id}"):
+            e_sub_name = st.text_input("ชื่อตัวละครเสริม:", value=selected_sub_name)
+            e_sub_prompt = st.text_area("คาแรคเตอร์:", value=sp_prompt, height=60)
+            e_sub_pers = st.text_area("บุคลิก:", value=sp_pers, height=60)
+            e_sub_lore = st.text_area("เรื่องราวพื้นหลัง:", value=sp_lore, height=60)
+            e_sub_av = st.file_uploader(
+                "เปลี่ยนรูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"]
+            )
+
+            col_sub_e1, col_sub_e2 = st.columns(2)
+            with col_sub_e1:
+              submit_edit_sub = st.form_submit_button(
+                  "💾 บันทึก", use_container_width=True
+              )
+            with col_sub_e2:
+              submit_del_sub = st.form_submit_button(
+                  "🗑️ ลบ", use_container_width=True
+              )
+
+            if submit_edit_sub:
+              final_sub_av = (
+                  e_sub_av.getvalue() if e_sub_av is not None else sp_av
+              )
+              cursor.execute(
+                  """
+                    UPDATE supporting_characters 
+                    SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ?, sub_avatar = ? 
+                    WHERE id = ?
+                """,
+                  (
+                      e_sub_name,
+                      e_sub_prompt,
+                      e_sub_pers,
+                      e_sub_lore,
+                      final_sub_av,
+                      selected_sub_id,
+                  ),
+              )
+              conn.commit()
+              st.success("อัปเดตตัวละครเสริมสำเร็จ!")
+              st.rerun()
+
+            if submit_del_sub:
+              cursor.execute(
+                  "DELETE FROM supporting_characters WHERE id = ?",
+                  (selected_sub_id,),
+              )
+              conn.commit()
+              st.success("ลบตัวละครเสริมสำเร็จ!")
+              st.rerun()
+      else:
+        st.caption("ยังไม่มีตัวละครเสริมในเรื่องนี้")
+
+  # 4. จัดการภารกิจ (Admin Only)
   elif (
       is_current_admin
       and sidebar_action == "🎯 จัดการภารกิจ (Quest Log)"
       and st.session_state.current_char
   ):
-    with st.form("add_q", clear_on_submit=True):
-      q_desc = st.text_input("รายละเอียดภารกิจ:")
-      q_pts = st.slider("คะแนนรางวัล:", 5, 50, 10)
-      if st.form_submit_button("เพิ่มภารกิจ", use_container_width=True) and q_desc:
+    st.markdown(f"### 🎯 จัดการภารกิจ: {st.session_state.current_char}")
+    with st.form("add_quest_form_sidebar", clear_on_submit=True):
+      new_quest_desc = st.text_input("รายละเอียดภารกิจใหม่:")
+      new_quest_pts = st.slider("คะแนนรางวัล:", 5, 50, 15)
+      if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and new_quest_desc:
         cursor.execute(
             "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-            (st.session_state.current_char, q_desc, q_pts),
+            (st.session_state.current_char, new_quest_desc, new_quest_pts),
         )
         conn.commit()
-        st.success("สำเร็จ!")
+        st.success("เพิ่มภารกิจสำเร็จ!")
         st.rerun()
 
+    st.markdown("---")
+    cursor.execute(
+        "SELECT id, task_desc FROM quests WHERE char_name = ?",
+        (st.session_state.current_char,),
+    )
+    q_list = cursor.fetchall()
+    if q_list:
+      for q_id, q_desc in q_list:
+        q_col1, q_col2 = st.columns([4, 1])
+        with q_col1:
+          st.markdown(f"- **[#{q_id}]** {q_desc}")
+        with q_col2:
+          if st.button("🗑️", key=f"del_q_{q_id}"):
+            cursor.execute("DELETE FROM quests WHERE id = ?", (q_id,))
+            conn.commit()
+            st.rerun()
+    else:
+      st.caption("ยังไม่มีภารกิจในระบบ")
+
+  # 5. จัดการคลังรูปภาพ (Admin Only)
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
       and st.session_state.current_char
   ):
-    photos = st.file_uploader(
-        "อัปโหลดรูปภาพ", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True
+    st.markdown(f"### 🖼️ คลังรูป: {st.session_state.current_char}")
+    uploaded_gallery_photos = st.file_uploader(
+        "อัปโหลดรูปภาพเข้าคลัง",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
     )
-    if photos:
+
+    if uploaded_gallery_photos:
       cursor.execute(
-          "DELETE FROM character_photos WHERE char_name = ?",
+          "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
           (st.session_state.current_char,),
       )
-      for p in photos:
-        cursor.execute(
-            "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-            (st.session_state.current_char, p.getvalue()),
-        )
-      conn.commit()
-      st.success("อัปเดตรูปสำเร็จ!")
+      current_db_count = cursor.fetchone()[0]
 
-  elif is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
-    cursor.execute("SELECT username, is_admin FROM users")
-    for u_name_db, u_admin in cursor.fetchall():
-      with st.container(border=True):
-        st.markdown(
-            f"**ยูสเซอร์:** `{u_name_db}` ({'Admin' if u_admin else 'User'})"
+      if len(uploaded_gallery_photos) != current_db_count:
+        cursor.execute(
+            "DELETE FROM character_photos WHERE char_name = ?",
+            (st.session_state.current_char,),
         )
-        with st.form(f"del_{u_name_db}"):
-          if (
-              st.form_submit_button("🗑️ ลบบัญชี", use_container_width=True)
-              and u_name_db.lower() != "admin"
-          ):
-            cursor.execute("DELETE FROM users WHERE username = ?", (u_name_db,))
+        for photo in uploaded_gallery_photos:
+          cursor.execute(
+              "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+              (st.session_state.current_char, photo.getvalue()),
+          )
+        conn.commit()
+        st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+        st.rerun()
+
+    st.markdown("---")
+    cursor.execute(
+        "SELECT id, photo FROM character_photos WHERE char_name = ?",
+        (st.session_state.current_char,),
+    )
+    photos_in_db = cursor.fetchall()
+    if photos_in_db:
+      p_cols = st.columns(3)
+      for idx, (p_id, p_blob) in enumerate(photos_in_db):
+        with p_cols[idx % 3]:
+          img_item = Image.open(io.BytesIO(p_blob))
+          st.image(img_item, use_container_width=True)
+          if st.button(f"🗑️ ลบ #{p_id}", key=f"del_photo_{p_id}"):
+            cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
             conn.commit()
-            st.success(f"ลบ {u_name_db} สำเร็จ")
             st.rerun()
+    else:
+      st.caption("ยังไม่มีรูปภาพในคลัง")
+
+  # 6. จัดการผู้ใช้งานระบบ (Admin Only)
+  elif is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
+    st.markdown("### 👥 รายชื่อผู้ใช้งานทั้งหมด")
+    cursor.execute("SELECT username, is_admin FROM users")
+    users_list = cursor.fetchall()
+
+    if users_list:
+      for u_name_db, u_admin in users_list:
+        with st.container(border=True):
+          role_label = "🛡️ Admin" if u_admin == 1 else "👤 User"
+          st.markdown(f"**ยูสเซอร์:** `{u_name_db}` ({role_label})")
+
+          with st.form(f"manage_user_{u_name_db}"):
+            new_p = st.text_input(
+                "เปลี่ยนรหัสผ่านใหม่:", type="password", key=f"np_{u_name_db}"
+            )
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+              btn_save_p = st.form_submit_button(
+                  "💾 บันทึกรหัส", use_container_width=True
+              )
+            with col_u2:
+              btn_del_u = st.form_submit_button(
+                  "🗑️ ลบบัญชี", use_container_width=True
+              )
+
+            if btn_save_p:
+              if new_p:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (hash_password(new_p), u_name_db),
+                )
+                conn.commit()
+                st.success(f"เปลี่ยนรหัสผ่านของ '{u_name_db}' สำเร็จ!")
+                st.rerun()
+              else:
+                st.warning("กรุณากรอกรหัสผ่านใหม่")
+
+            if btn_del_u:
+              if (
+                  u_name_db.lower() == "admin"
+                  and current_user.lower() == u_name_db
+              ):
+                st.error("ไม่สามารถลบบัญชี Admin หลักของตัวเองได้")
+              else:
+                cursor.execute(
+                    "DELETE FROM users WHERE username = ?", (u_name_db,)
+                )
+                cursor.execute(
+                    "DELETE FROM messages WHERE username = ?", (u_name_db,)
+                )
+                cursor.execute(
+                    "DELETE FROM character_status WHERE username = ?",
+                    (u_name_db,),
+                )
+                cursor.execute(
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
+                )
+                conn.commit()
+                st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
+                st.rerun()
+    else:
+      st.info("ยังไม่มีผู้ใช้งานอื่นในระบบ")
+
+  if not all_chars and (
+      not is_current_admin or sidebar_action != "➕ สร้างตัวละครหลักใหม่"
+  ):
+    st.info("ยังไม่มีตัวละครหลักในระบบ กรุณาให้ Admin สร้างตัวละครก่อนครับ")
+
 
 # ==========================================
 # 🏠 หน้าแรก
 # ==========================================
 if not st.session_state.in_chat:
+  if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
+    st.title("👥 ระบบจัดการผู้ใช้งานทั้งหมด")
+    st.caption(
+        "ดูรายชื่อ แก้ไขรหัสผ่าน หรือลบบัญชีผู้ใช้งานที่สมัครเข้ามาในระบบได้ที่นี่"
+    )
+    st.divider()
+
+    cursor.execute("SELECT username, is_admin FROM users")
+    all_users = cursor.fetchall()
+
+    if all_users:
+      for u_name_db, u_admin in all_users:
+        with st.container(border=True):
+          role_label = (
+              "🛡️ ผู้ดูแลระบบ (Admin)"
+              if u_admin == 1
+              else "👤 ผู้ใช้งานทั่วไป (User)"
+          )
+          st.markdown(f"### ชื่อผู้ใช้: `{u_name_db}` — *({role_label})*")
+
+          with st.form(f"main_manage_user_{u_name_db}"):
+            m_new_pass = st.text_input(
+                "ตั้งรหัสผ่านใหม่:", type="password", key=f"mp_{u_name_db}"
+            )
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+              m_save = st.form_submit_button(
+                  "💾 อัปเดตรหัสผ่าน", use_container_width=True
+              )
+            with col_m2:
+              m_del = st.form_submit_button(
+                  "🗑️ ลบบัญชีนี้", use_container_width=True
+              )
+
+            if m_save:
+              if m_new_pass:
+                cursor.execute(
+                    "UPDATE users SET password = ? WHERE username = ?",
+                    (hash_password(m_new_pass), u_name_db),
+                )
+                conn.commit()
+                st.success(f"อัปเดตรหัสผ่านของ '{u_name_db}' สำเร็จ!")
+                st.rerun()
+              else:
+                st.warning("กรุณากรอกรหัสผ่านใหม่")
+
+            if m_del:
+              if u_name_db.lower() == "admin":
+                st.error("ไม่อนุญาตให้ลบบัญชี Admin หลัก")
+              else:
+                cursor.execute(
+                    "DELETE FROM users WHERE username = ?", (u_name_db,)
+                )
+                cursor.execute(
+                    "DELETE FROM messages WHERE username = ?", (u_name_db,)
+                )
+                cursor.execute(
+                    "DELETE FROM character_status WHERE username = ?",
+                    (u_name_db,),
+                )
+                cursor.execute(
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
+                )
+                conn.commit()
+                st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
+                st.rerun()
+    else:
+      st.info("ยังไม่มีผู้ใช้งานในระบบ")
+
+    st.stop()
+
   st.title("🔥 จักรวาลยอดนิยม & ตัวละครทั้งหมด")
   st.divider()
 
