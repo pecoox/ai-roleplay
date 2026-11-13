@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม (ปรับแต่งการ์ดหน้าแรกให้สวยงามทันสมัยแบบแอปแชทดัง)
+# 🎨 ดีไซน์ CSS พรีเมียม (ปรับรูปให้เต็มกรอบสวยงามลงตัว)
 st.markdown(
     """
     <style>
@@ -40,21 +40,22 @@ st.markdown(
         font-weight: bold;
     }
 
-    /* 🖼️ ปรับแต่งรูปภาพการ์ดหน้าแรกให้เต็มกรอบสวยงาม สัดส่วนเป๊ะ */
+    /* 🖼️ บังคับให้รูปภาพขยายเต็มกรอบการ์ดพอดี 100% ทุกรูป */
     div[data-testid="stImage"] {
+        width: 100% !important;
         border-radius: 16px;
         overflow: hidden;
         box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     }
     div[data-testid="stImage"] img {
-        height: 260px !important;
+        height: 280px !important;
         width: 100% !important;
         object-fit: cover !important;
         border-radius: 16px !important;
         transition: transform 0.4s ease;
     }
     div[data-testid="stImage"] img:hover {
-        transform: scale(1.05);
+        transform: scale(1.03);
     }
     </style>
 """,
@@ -989,7 +990,7 @@ with st.sidebar:
                     (u_name_db,),
                 )
                 cursor.execute(
-                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,),
                 )
                 conn.commit()
                 st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
@@ -1009,7 +1010,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก (แสดงการ์ดตัวละครดีไซน์พรีเมียม สวยงามลงตัว)
+# 🏠 หน้าแรก (แสดงการ์ดตัวละครดีไซน์พรีเมียม รูปเต็มกรอบ)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
