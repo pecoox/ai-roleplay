@@ -3,7 +3,7 @@ import streamlit as st
 import sqlite3
 import time
 from PIL import Image
-io
+import io
 import random
 import json
 import hashlib
@@ -1171,7 +1171,7 @@ with st.sidebar:
                     (u_name_db,),
                 )
                 cursor.execute(
-                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,),
                 )
                 conn.commit()
                 st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
