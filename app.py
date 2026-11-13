@@ -7,12 +7,12 @@ import io
 import random
 
 st.set_page_config(
-    page_title="AI Roleplay - Lore & Image Generation",
-    page_icon="🖼️",
+    page_title="AI Roleplay - Character Studio",
+    page_icon="🎨",
     layout="centered",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม
+# 🎨 ดีไซน์ CSS พรีเมียมและจัดระเบียบฟอร์มให้ชัดเจน
 st.markdown(
     """
     <style>
@@ -25,13 +25,19 @@ st.markdown(
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* ตกแต่งกล่อง Sidebar ให้เด่นชัด */
+    [data-testid="stSidebar"] .stTextInput input, [data-testid="stSidebar"] .stTextArea textarea {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-# 🗄️ ปรับปรุงฐานข้อมูล SQLite ให้เก็บบันทึกข้อมูลเชิงลึก (Lore/Background) ของตัวละครได้ด้วย
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -59,7 +65,7 @@ def init_db():
 conn = init_db()
 cursor = conn.cursor()
 
-# ตรวจสอบตัวละครเริ่มต้น (มาร์ค ต้วน)
+# ตรวจสอบตัวละครเริ่มต้น
 cursor.execute("SELECT COUNT(*) FROM characters")
 if cursor.fetchone()[0] == 0:
   cursor.execute(
@@ -71,7 +77,7 @@ if cursor.fetchone()[0] == 0:
               " นิสัยอบอุ่น เป็นกันเอง และขี้เล่น"
           ),
           (
-              "เป็นเพื่อนสนิทที่รู้จักกันมานาน ชอบแอบAเปย์ของกินอร่อยๆ"
+              "เป็นเพื่อนสนิทที่รู้จักกันมานาน ชอบแอบเปย์ของกินอร่อยๆ"
               " และคอยเป็นห่วงเสมอ"
           ),
           None,
@@ -105,22 +111,25 @@ with st.sidebar:
   )
 
   st.divider()
-  st.subheader("✨ สร้างตัวละครใหม่ + ข้อมูลเชิงลึก")
-  new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น แฟนหนุ่ม, ไอดอล...")
+  st.markdown("### 🛠️ สร้างตัวละครใหม่")
+
+  # ฟอร์มสร้างตัวละครจัดเรียงชัดเจน
+  new_name = st.text_input("1️⃣ ชื่อตัวละคร:", placeholder="เช่น มดอ้วน, แฟนหนุ่ม...")
   new_prompt = st.text_area(
-      "คาแรคเตอร์สั้นๆ:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=70
+      "2️⃣ คาแรคเตอร์สั้นๆ:",
+      placeholder="คุณคือเพื่อนสนิทขี้อ้อน...",
+      height=70,
   )
-  # 📝 เพิ่มช่องใส่ข้อมูล/ประวัติเชิงลึกของตัวละคร
   new_lore = st.text_area(
-      "📖 ข้อมูล/ประวัติเชิงลึก (Lore):",
+      "3️⃣ ข้อมูลเชิงลึก (Lore/ประวัติ):",
       placeholder="เนื้อเรื่องย่อ ความสัมพันธ์ หรือปูมหลัง...",
       height=90,
   )
   new_avatar = st.file_uploader(
-      "อัปโหลดรูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg"]
+      "4️⃣ อัปโหลดรูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg"]
   )
 
-  if st.button("🚀 สร้างตัวละคร", use_container_width=True):
+  if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
     if new_name and new_prompt:
       cursor.execute("SELECT name FROM characters WHERE name = ?", (new_name,))
       if not cursor.fetchone():
@@ -138,7 +147,7 @@ with st.sidebar:
       else:
         st.warning("ชื่อนี้มีอยู่แล้วในระบบ")
     else:
-      st.warning("กรุณากรอกชื่อและคาแรคเตอร์ให้ครบ")
+      st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์ให้ครบ")
 
   st.divider()
   st.subheader("👥 เลือกตัวละคร")
@@ -179,7 +188,7 @@ with st.sidebar:
   else:
     st.caption("ℹ️ ต้องมีตัวละครอย่างน้อย 1 ตัว")
 
-# ดึงข้อมูลตัวละครปัจจุบัน รวมถึง Lore เชิงลึก
+# ดึงข้อมูลตัวละครปัจจุบัน
 cursor.execute(
     "SELECT prompt, lore, avatar FROM characters WHERE name = ?",
     (st.session_state.current_char,),
@@ -193,7 +202,7 @@ char_avatar_img = None
 if char_avatar_blob:
   char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-# รวมข้อมูล Lore เข้าไปใน Prompt เพื่อให้ AI จำเนื้อเรื่องและข้อมูลตัวละครได้แม่นยำขึ้น
+# รวม Prompt และ Lore
 full_system_prompt = f"{base_prompt}\n\n[ข้อมูลและประวัติเชิงลึกของตัวละคร (Lore)]:\n{char_lore if char_lore else 'ไม่มีข้อมูลพิเศษ'}"
 
 if "นิยาย" in chat_mode:
@@ -214,7 +223,7 @@ else:
   )
   temp_val = 0.9
 
-# ดึงประวัติแชทพร้อมรูปภาพที่แนบมาด้วย
+# ดึงข้อความแชท
 cursor.execute(
     "SELECT role, content, image_url FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
@@ -235,7 +244,7 @@ with col_title:
   st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
 st.divider()
 
-# แสดงประวัติแชท (รองรับการแสดงรูปภาพที่ตัวละครส่งมาด้วย)
+# แสดงประวัติแชท
 for message in current_messages:
   if message["role"] == "user":
     with st.chat_message("user", avatar="👤"):
@@ -244,7 +253,7 @@ for message in current_messages:
     avatar_icon = char_avatar_img if char_avatar_img else "✨"
     with st.chat_message("assistant", avatar=avatar_icon):
       st.markdown(message["content"])
-      if message["image_url"]:  # ถ้ามีรูปที่เคยส่ง ให้แสดงผลรูปด้วย
+      if message["image_url"]:
         st.image(message["image_url"], width=280)
 
 # ช่องพิมพ์ข้อความ
@@ -291,7 +300,7 @@ if user_input := st.chat_input(
         response = chat.send_message(user_input)
         bot_response = response.text
 
-        # 📸 จำลองระบบสุ่มส่งรูปภาพ (โอกาสประมาณ 25% ในทุกๆ ข้อความที่ตอบ เพื่อให้ดูเซอร์ไพรส์และเป็นธรรมชาติ)
+        # สุ่มส่งรูปภาพประกอบ (ประมาณ 25%)
         if random.random() < 0.25:
           sample_images = [
               "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
@@ -325,7 +334,6 @@ if user_input := st.chat_input(
       if attached_image:
         st.image(attached_image, width=280)
 
-      # บันทึกข้อความและรูปภาพลงฐานข้อมูลอย่างถาวร
       cursor.execute(
           "INSERT INTO messages (char_name, role, content, image_url) VALUES (?,"
           " ?, ?, ?)",
