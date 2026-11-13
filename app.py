@@ -55,7 +55,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password TEXT,
-            is_admin INTEGER DEFAULT 0
+            is_admin INTEGER DEFAULT 0,
+            user_persona TEXT DEFAULT ''
         )
     """)
 
@@ -63,6 +64,8 @@ def init_db():
   columns = [col[1] for col in cursor.fetchall()]
   if "is_admin" not in columns:
     cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+  if "user_persona" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN user_persona TEXT DEFAULT ''")
 
   # ตัวละครหลัก (ส่วนกลาง ทุกคนเห็นเหมือนกัน)
   cursor.execute("""
@@ -229,9 +232,14 @@ if not st.session_state.logged_in:
             )
 
             cursor.execute(
-                "INSERT INTO users (username, password, is_admin) VALUES (?, ?,"
-                " ?)",
-                (r_user, hash_password(r_pass), assigned_admin),
+                "INSERT INTO users (username, password, is_admin, user_persona)"
+                " VALUES (?, ?, ?, ?)",
+                (
+                    r_user,
+                    hash_password(r_pass),
+                    assigned_admin,
+                    f"นักเรียนใหม่บ้านสลิธีริน เพื่อนร่วมชั้นของเดรโก",
+                ),
             )
             conn.commit()
             if assigned_admin:
@@ -255,6 +263,17 @@ if current_user.lower() == "admin":
   st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
 
+# ดึงข้อมูล Persona ของผู้ใช้ปัจจุบัน
+cursor.execute(
+    "SELECT user_persona FROM users WHERE username = ?", (current_user,)
+)
+p_row = cursor.fetchone()
+current_user_persona = (
+    p_row[0]
+    if p_row and p_row[0]
+    else "คุณคือผู้เล่นทั่วไปในโลกแฟนตาซีนี้"
+)
+
 # ดึงรายชื่อตัวละครส่วนกลางทั้งหมด
 cursor.execute("SELECT name FROM characters")
 all_chars = [row[0] for row in cursor.fetchall()]
@@ -275,6 +294,29 @@ with st.sidebar:
     st.markdown("🛡️ **สถานะ:** `ผู้ดูแลระบบ (Admin)`")
   else:
     st.markdown("👤 **สถานะ:** `ผู้ใช้งานทั่วไป (User)`")
+
+  st.divider()
+
+  # 🎭 เมนูตั้งค่าบทบาทของตัวเอง (User Persona)
+  with st.expander("🎭 ตั้งค่าบทบาท/ตัวตนของคุณ"):
+    with st.form("user_persona_form"):
+      new_persona = st.text_area(
+          "บทบาทของคุณในการสวมบทบาท (Roleplay Persona):",
+          value=current_user_persona,
+          height=90,
+          placeholder="เช่น ชื่อ เมอร์ลิน เป็นเด็กปี 1 บ้านกริฟฟินดอร์...",
+      )
+      save_persona = st.form_submit_button(
+          "💾 บันทึกบทบาท", use_container_width=True
+      )
+      if save_persona:
+        cursor.execute(
+            "UPDATE users SET user_persona = ? WHERE username = ?",
+            (new_persona, current_user),
+        )
+        conn.commit()
+        st.success("บันทึกบทบาทของคุณสำเร็จ!")
+        st.rerun()
 
   if st.button("🚪 ออกจากระบบ", use_container_width=True):
     st.session_state.logged_in = False
@@ -760,7 +802,6 @@ with st.sidebar:
           role_label = "🛡️ Admin" if u_admin == 1 else "👤 User"
           st.markdown(f"**ยูสเซอร์:** `{u_name}` ({role_label})")
 
-          # ฟอร์มแก้ไขรหัสผ่านและลบบัญชี
           with st.form(f"manage_user_{u_name}"):
             new_p = st.text_input(
                 "เปลี่ยนรหัสผ่านใหม่ (ถ้าต้องการ):",
@@ -821,7 +862,6 @@ with st.sidebar:
 # 🏠 ส่วนแสดงผลหน้าแรก (Discovery / Home Hub)
 # ==========================================
 if not st.session_state.in_chat:
-  # ถ้าแอดมินเลือกเมนูปัดจัดการยูสเซอร์ใน sidebar ให้แสดงหน้าจัดการแทนหน้าแรกปกติ
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
     st.title("👥 ระบบจัดการผู้ใช้งานทั้งหมด")
     st.caption(
@@ -1060,6 +1100,9 @@ if st.session_state.in_chat and st.session_state.current_char:
 
   full_system_prompt = f"""
     {base_prompt}
+
+    [ข้อมูลผู้สนทนา / บทบาทของคุณ (User Persona)]:
+    {current_user_persona}
 
     [บุคลิกและนิสัยของตัวละครหลัก]:
     {char_personality}
