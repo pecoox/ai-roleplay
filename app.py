@@ -1192,7 +1192,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก (พร้อมปุ่มดูบทบาทตัวละคร)
+# 🏠 หน้าแรก (พร้อมปุ่มดูบทบาทแยกอิสระ)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1296,43 +1296,45 @@ if not st.session_state.in_chat:
             )
           st.markdown(f"### 🌟 {c_name}")
 
-          # ปุ่มดูบทบาทตัวละคร (Pop-up)
-          with st.popover("📖 ดูบทบาท / ข้อมูลตัวละคร", use_container_width=True):
-            st.markdown(f"### 🌟 {c_name}")
-            st.markdown(f"**📌 คาแรคเตอร์:**\n{c_prompt}")
-            st.markdown(f"**🧠 บุคลิก/นิสัย:**\n{c_pers}")
-            st.markdown(f"**📖 เรื่องราวพื้นหลัง:**\n{c_lore}")
+          # จัดปุ่มสองปุ่มคู่กัน (ดูข้อมูล กับ เริ่มแชท)
+          btn_col1, btn_col2 = st.columns(2)
 
-            cursor.execute(
-                "SELECT sub_name, sub_prompt, sub_lore FROM supporting_characters WHERE char_name = ?",
-                (c_name,),
-            )
-            subs = cursor.fetchall()
-            if subs:
-              st.markdown("---")
-              st.markdown("**👥 ตัวละครเสริมในเรื่อง:**")
-              for s_name, s_p, s_l in subs:
-                st.markdown(f"- **{s_name}**: {s_p} *({s_l})*")
+          with btn_col1:
+            with st.popover("📖 ดูข้อมูล", use_container_width=True):
+              st.markdown(f"### 🌟 {c_name}")
+              st.markdown(f"**📌 คาแรคเตอร์:**\n{c_prompt}")
+              st.markdown(f"**🧠 บุคลิก/นิสัย:**\n{c_pers}")
+              st.markdown(f"**📖 เรื่องราวพื้นหลัง:**\n{c_lore}")
 
-            cursor.execute(
-                "SELECT task_desc, reward_points FROM quests WHERE char_name = ?",
-                (c_name,),
-            )
-            quests = cursor.fetchall()
-            if quests:
-              st.markdown("---")
-              st.markdown("**🎯 ภารกิจเริ่มต้น:**")
-              for q_desc, q_pts in quests:
-                st.markdown(f"- {q_desc} `(+{q_pts} แต้ม)`")
+              cursor.execute(
+                  "SELECT sub_name, sub_prompt, sub_lore FROM supporting_characters WHERE char_name = ?",
+                  (c_name,),
+              )
+              subs = cursor.fetchall()
+              if subs:
+                st.markdown("---")
+                st.markdown("**👥 ตัวละครเสริมในเรื่อง:**")
+                for s_name, s_p, s_l in subs:
+                  st.markdown(f"- **{s_name}**: {s_p} *({s_l})*")
 
-          if st.button(
-              f"✨ เริ่มแชทกับ {c_name}",
-              key=f"b_{c_name}",
-              use_container_width=True,
-          ):
-            st.session_state.current_char = c_name
-            st.session_state.in_chat = True
-            st.rerun()
+              cursor.execute(
+                  "SELECT task_desc, reward_points FROM quests WHERE char_name = ?",
+                  (c_name,),
+              )
+              quests = cursor.fetchall()
+              if quests:
+                st.markdown("---")
+                st.markdown("**🎯 ภารกิจเริ่มต้น:**")
+                for q_desc, q_pts in quests:
+                  st.markdown(f"- {q_desc} `(+{q_pts} แต้ม)`")
+
+          with btn_col2:
+            if st.button(
+                "✨ แชท", key=f"b_{c_name}", use_container_width=True
+            ):
+              st.session_state.current_char = c_name
+              st.session_state.in_chat = True
+              st.rerun()
   st.stop()
 
 
