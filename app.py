@@ -164,10 +164,10 @@ with st.sidebar:
   )
 
   st.divider()
-  st.markdown("### 🛠️ สร้างตัวละครหลักใหม่")
+  st.markdown("### 🛠️ จัดการตัวละครหลัก")
 
   is_form_expanded = len(all_chars) == 0
-  with st.expander("📌 ฟอร์มสร้างตัวละครหลัก", expanded=is_form_expanded):
+  with st.expander("📌 ฟอร์มสร้างตัวละครหลักใหม่", expanded=is_form_expanded):
     new_name = st.text_input("ชื่อตัวละครหลัก:", placeholder="เช่น เดรโก มัลฟอย...")
     new_prompt = st.text_area(
         "คาแรคเตอร์หลัก (Prompt):", placeholder="คุณคือ...", height=60
@@ -186,17 +186,17 @@ with st.sidebar:
     msg_1 = st.text_area(
         "#1 ข้อความแรกแบบที่ 1:",
         placeholder="สถานการณ์ที่ 1...",
-        height=100,
+        height=80,
     )
     msg_2 = st.text_area(
         "#2 ข้อความแรกแบบที่ 2:",
         placeholder="สถานการณ์ที่ 2...",
-        height=100,
+        height=80,
     )
     msg_3 = st.text_area(
         "#3 ข้อความแรกแบบที่ 3:",
         placeholder="สถานการณ์ที่ 3...",
-        height=100,
+        height=80,
     )
 
     new_avatar = st.file_uploader(
@@ -213,7 +213,6 @@ with st.sidebar:
               new_avatar.getvalue() if new_avatar is not None else None
           )
 
-          # รวม 3 ช่องเข้าด้วยกันโดยคั่นด้วยตัวแบ่งพิเศษ เพื่อเก็บลงฐานข้อมูลคอลัมน์เดียว
           combined_msgs = json.dumps(
               [m.strip() for m in [msg_1, msg_2, msg_3] if m.strip()],
               ensure_ascii=False,
@@ -245,7 +244,6 @@ with st.sidebar:
               (new_name, 0, "คนแปลกหน้า"),
           )
 
-          # สุ่มเลือกข้อความแรกมา 1 อัน
           msg_list = json.loads(combined_msgs)
           chosen_first_msg = (
               random.choice(msg_list)
@@ -286,6 +284,81 @@ with st.sidebar:
         or selected_char != st.session_state.current_char
     ):
       st.session_state.current_char = selected_char
+
+    # ✏️ เมนูแก้ไขข้อมูลตัวละครหลักปัจจุบัน
+    cursor.execute(
+        "SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?",
+        (st.session_state.current_char,),
+    )
+    curr_data = cursor.fetchone()
+    if curr_data:
+      c_prompt, c_pers, c_lore, c_fmsg_json, c_avatar = curr_data
+      try:
+        old_msgs = json.loads(c_fmsg_json)
+      except Exception:
+        old_msgs = [c_fmsg_json]
+
+      om1 = old_msgs[0] if len(old_msgs) > 0 else ""
+      om2 = old_msgs[1] if len(old_msgs) > 1 else ""
+      om3 = old_msgs[2] if len(old_msgs) > 2 else ""
+
+      with st.expander(
+          f"✏️ แก้ไขข้อมูล: {st.session_state.current_char}", expanded=False
+      ):
+        with st.form("edit_char_form"):
+          edit_prompt = st.text_area(
+              "คาแรคเตอร์หลัก (Prompt):", value=c_prompt, height=60
+          )
+          edit_pers = st.text_area(
+              "🧠 บุคลิก/นิสัย:", value=c_pers, height=60
+          )
+          edit_lore = st.text_area(
+              "📖 เรื่องราวพื้นหลัง (Lore):", value=c_lore, height=70
+          )
+
+          st.markdown("💬 **แก้ไขข้อความแรก (3 รูปแบบ)**")
+          edit_m1 = st.text_area("ข้อความที่ 1:", value=om1, height=70)
+          edit_m2 = st.text_area("ข้อความที่ 2:", value=om2, height=70)
+          edit_m3 = st.text_area("ข้อความที่ 3:", value=om3, height=70)
+
+          edit_avatar = st.file_uploader(
+              "เปลี่ยนรูปโปรไฟล์ (ถ้ามี)",
+              type=["png", "jpg", "jpeg", "webp"],
+              key="edit_avatar_up",
+          )
+
+          submit_edit = st.form_submit_button(
+              "💾 บันทึกการแก้ไข", use_container_width=True
+          )
+          if submit_edit:
+            new_avatar_bytes = (
+                edit_avatar.getvalue()
+                if edit_avatar is not None
+                else c_avatar
+            )
+            new_combined_msgs = json.dumps(
+                [m.strip() for m in [edit_m1, edit_m2, edit_m3] if m.strip()],
+                ensure_ascii=False,
+            )
+
+            cursor.execute(
+                """
+                UPDATE characters 
+                SET prompt = ?, personality = ?, lore = ?, first_message = ?, avatar = ? 
+                WHERE name = ?
+            """,
+                (
+                    edit_prompt,
+                    edit_pers,
+                    edit_lore,
+                    new_combined_msgs,
+                    new_avatar_bytes,
+                    st.session_state.current_char,
+                ),
+            )
+            conn.commit()
+            st.success("อัปเดตข้อมูลตัวละครสำเร็จ!")
+            st.rerun()
 
     with st.expander(
         f"👥 เพิ่มตัวละครเสริมให้: {st.session_state.current_char}",
@@ -515,7 +588,6 @@ if not st.session_state.in_chat:
           else:
             st.markdown("**👥 ตัวละครเสริมในเรื่อง:** ไม่มี")
 
-          # แปลง JSON ข้อความแรกมาแสดงตัวอย่างแบบคร่าวๆ
           try:
             msgs_preview = json.loads(p_data[3])
             preview_str = " / ".join(
@@ -627,7 +699,6 @@ if st.session_state.in_chat and st.session_state.current_char:
     )
     temp_val = 0.9
 
-  # ฟังก์ชันสุ่มข้อความแรกจาก JSON List ที่ผู้ใช้กรอกแยกไว้ 3 ช่อง
   def get_random_first_msg(raw_json, char_name):
     try:
       msgs = json.loads(raw_json)
@@ -687,7 +758,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         """,
           (st.session_state.current_char,),
       )
-      # สุ่มข้อความแรกแบบใหม่จาก 3 ตัวเลือกเมื่อกดรีเซ็ต
       new_random_msg = get_random_first_msg(
           char_first_msg_raw, st.session_state.current_char
       )
