@@ -166,7 +166,6 @@ with st.sidebar:
   st.divider()
   st.markdown("### 🛠️ จัดการระบบตัวละคร")
 
-  # 📌 เมนูหลักแบบ Radio ให้เลือกทีละอย่าง ไม่ให้รกหน้าจอ
   sidebar_action = st.selectbox(
       "เลือกการจัดการ:",
       [
@@ -797,6 +796,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     current_affection = status_row[0]
     current_rel_level = status_row[1]
 
+  # อัปเดตกฎการประเมินค่าความชอบใหม่ ให้ลดได้หากผู้ใช้คุยไม่ถูกใจหรือใช้คำหยาบคาย/ด่า
   full_system_prompt = f"""
     {base_prompt}
 
@@ -810,7 +810,12 @@ if st.session_state.in_chat and st.session_state.current_char:
     {supporting_text}
 
     [สถานะความสัมพันธ์ปัจจุบันกับผู้ใช้]: ระดับ "{current_rel_level}" (คะแนนความชอบ: {current_affection}/100)
-    *คำสั่งพิเศษ*: ให้ประเมินสถานการณ์ว่าการคุยครั้งนี้ตรงกับเงื่อนไขภารกิจใดที่ยังค้างอยู่หรือไม่ หากตรง ให้ระบุหมายเลขไอดีภารกิจนั้นใน JSON ด้านล่างเพื่อปลดล็อก
+    
+    *กฎการประเมินคะแนนความชอบ (score_change)*:
+    - ถ้าผู้ใช้คุยดี เป็นมิตร ทำตามภารกิจ หรือพูดจาถูกใจ: ให้คะแนนบวกเพิ่ม (2 ถึง 10)
+    - ถ้าผู้ใช้คุยเฉยๆ ไม่ค่อยน่าสนใจ หรือขัดใจเล็กน้อย: ให้คะแนนติดลบเล็กน้อย (-1 ถึง -3)
+    - ถ้าผู้ใช้พูดจาด่าทอ ใช้คำหยาบคาย รังควาน หรือสร้างความไม่พอใจอย่างมาก: ให้คะแนนติดลบเยอะ (-5 ถึง -15) และตัวละครจะต้องแสดงอาการโกรธหรือไม่พอใจตามคาแรคเตอร์ด้วย
+    - คะแนนรวมสามารถลดต่ำกว่า 0 ได้ (สูงสุดไม่เกิน 100)
     """
 
   if "นิยาย" in chat_mode:
@@ -820,7 +825,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         " ครอบการกระทำ)\n"
         "2. สวมบทบาท 100% ตามระดับความสัมพันธ์ปัจจุบัน ห้ามหลุดคาแรคเตอร์\n"
         "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-        '{"score_change": [คะแนนที่จะบวกเพิ่ม 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
+        '{"score_change": [ตัวเลขคะแนนที่เปลี่ยนแปลง เช่น บวก 5 หรือลบ 3 หรือลบ 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
     )
     temp_val = 1.1
   else:
@@ -829,9 +834,10 @@ if st.session_state.in_chat and st.session_state.current_char:
         "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี ตามระดับความสัมพันธ์ปัจจุบัน\n"
         "2. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์\n"
         "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-        '{"score_change": [คะแนนที่จะบวกเพิ่ม 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
+        '{"score_change": [ตัวเลขคะแนนที่เปลี่ยนแปลง เช่น บวก 5 หรือลบ 3 หรือลบ 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
     )
     temp_val = 0.9
+
 
   def get_random_first_msg(raw_json, char_name):
     try:
@@ -841,6 +847,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     except Exception:
       pass
     return f"สวัสดีครับ ฉันชื่อ {char_name}"
+
 
   cursor.execute(
       "SELECT COUNT(*) FROM messages WHERE char_name = ?",
@@ -1003,19 +1010,19 @@ if st.session_state.in_chat and st.session_state.current_char:
             else:
               bot_response = raw_text
               eval_data = {
-                  "score_change": 3,
+                  "score_change": 0,
                   "new_level": current_rel_level,
                   "quest_update": None,
               }
           except Exception:
             bot_response = raw_text
             eval_data = {
-                "score_change": 3,
+                "score_change": 0,
                 "new_level": current_rel_level,
                 "quest_update": None,
             }
 
-          score_inc = eval_data.get("score_change", 3)
+          score_change = eval_data.get("score_change", 0)
           new_lvl = eval_data.get("new_level", current_rel_level)
           completed_q_id = eval_data.get("quest_update", None)
 
@@ -1033,8 +1040,9 @@ if st.session_state.in_chat and st.session_state.current_char:
                   (completed_q_id,),
               )
 
-          updated_score = min(
-              100, current_affection + score_inc + quest_bonus
+          # คำนวณคะแนนใหม่ (รองรับทั้งบวกและลบ จำกัดช่วง 0 ถึง 100)
+          updated_score = max(
+              0, min(100, current_affection + score_change + quest_bonus)
           )
 
           cursor.execute(
