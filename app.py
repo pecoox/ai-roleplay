@@ -100,6 +100,14 @@ def init_db():
 conn = init_db()
 cursor = conn.cursor()
 
+# ❌ เคลียร์ตัวละครเริ่มต้น "มาร์ค ต้วน" ออกจากระบบทันที (ถ้ายังมีค้างอยู่)
+cursor.execute("DELETE FROM characters WHERE name = 'มาร์ค ต้วน'")
+cursor.execute("DELETE FROM character_status WHERE char_name = 'มาร์ค ต้วน'")
+cursor.execute("DELETE FROM quests WHERE char_name = 'มาร์ค ต้วน'")
+cursor.execute("DELETE FROM character_photos WHERE char_name = 'มาร์ค ต้วน'")
+cursor.execute("DELETE FROM messages WHERE char_name = 'มาร์ค ต้วน'")
+conn.commit()
+
 # ดึง API Key
 try:
   api_key = st.secrets["GEMINI_API_KEY"]
@@ -121,8 +129,8 @@ all_chars = [row[0] for row in cursor.fetchall()]
 if "in_chat" not in st.session_state:
   st.session_state.in_chat = False
 
-if "current_char" not in st.session_state:
-  st.session_state.current_char = None
+if "current_char" not in st.session_state or st.session_state.current_char not in all_chars:
+  st.session_state.current_char = all_chars[0] if all_chars else None
 
 # แผงควบคุมด้านข้าง (Sidebar)
 with st.sidebar:
