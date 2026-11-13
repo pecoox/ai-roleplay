@@ -443,7 +443,7 @@ with st.sidebar:
   else:
     sidebar_action = "เลือกตัวละคร"
 
-  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
+  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ใช้ Key แยกตามชื่อตัวละครเพื่อบังคับรีเฟรช State)
   if all_chars:
     st.divider()
     selected_char = st.selectbox(
@@ -461,6 +461,7 @@ with st.sidebar:
         or selected_char != st.session_state.current_char
     ):
       st.session_state.current_char = selected_char
+      st.rerun()
 
   st.divider()
   active_char = st.session_state.current_char
@@ -729,55 +730,67 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีภารกิจในระบบ")
 
-  # 5. จัดการคลังรูปภาพ (Admin Only) - แก้ไขปัญหาโหลดรูปไม่ตรงกับตัวละครที่เลือก
+  # 5. จัดการคลังรูปภาพ (Admin Only) - แก้ไขแบบแยกคีย์เด็ดขาดตามชื่อตัวละคร
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
       and active_char
   ):
     st.markdown(f"### 🖼️ คลังรูป: {active_char}")
+
+    # ดึงรูปของตัวละครปัจจุบันจาก DB ทันที
+    cursor.execute(
+        "SELECT id, photo FROM character_photos WHERE char_name = ?",
+        (active_char,),
+    )
+    photos_in_db = cursor.fetchall()
+
+    # ปุ่มเคลียร์รูปทั้งหมดของตัวละครนี้
+    if photos_in_db:
+      if st.button(
+          "🗑️ ล้างรูปทั้งหมดของตัวละครนี้",
+          key=f"clear_all_photos_{active_char}",
+          use_container_width=True,
+      ):
+        cursor.execute(
+            "DELETE FROM character_photos WHERE char_name = ?", (active_char,)
+        )
+        conn.commit()
+        st.success(f"ลบรูปภาพทั้งหมดของ '{active_char}' เรียบร้อยแล้ว!")
+        st.rerun()
+
     uploaded_gallery_photos = st.file_uploader(
-        "อัปโหลดรูปภาพเข้าคลัง",
+        "อัปโหลดรูปภาพเข้าคลัง (เพิ่มรูปใหม่)",
         type=["png", "jpg", "jpeg", "webp"],
         accept_multiple_files=True,
         key=f"gallery_upload_{active_char}",
     )
 
     if uploaded_gallery_photos:
-      # ดึงเฉพาะรูปของตัวละครปัจจุบันมานับจำนวน
-      cursor.execute(
-          "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
-          (active_char,),
-      )
-      current_db_count = cursor.fetchone()[0]
-
-      if len(uploaded_gallery_photos) != current_db_count:
+      for photo in uploaded_gallery_photos:
         cursor.execute(
-            "DELETE FROM character_photos WHERE char_name = ?",
-            (active_char,),
+            "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+            (active_char, photo.getvalue()),
         )
-        for photo in uploaded_gallery_photos:
-          cursor.execute(
-              "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-              (active_char, photo.getvalue()),
-          )
-        conn.commit()
-        st.success("อัปเดตคลังรูปภาพสำเร็จ!")
-        st.rerun()
+      conn.commit()
+      st.success("อัปโหลดรูปภาพเข้าคลังสำเร็จ!")
+      st.rerun()
 
     st.markdown("---")
+    # โหลดข้อมูลอัปเดตหลังกดลบหรืออัปโหลด
     cursor.execute(
         "SELECT id, photo FROM character_photos WHERE char_name = ?",
         (active_char,),
     )
     photos_in_db = cursor.fetchall()
+
     if photos_in_db:
       p_cols = st.columns(3)
       for idx, (p_id, p_blob) in enumerate(photos_in_db):
         with p_cols[idx % 3]:
           img_item = Image.open(io.BytesIO(p_blob))
           st.image(img_item, use_container_width=True)
-          if st.button(f"🗑️ ลบ #{p_id}", key=f"del_photo_{active_char}_{p_id}"):
+          if st.button(f"🗑️ ลบรูป #{p_id}", key=f"del_photo_{active_char}_{p_id}"):
             cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
             conn.commit()
             st.rerun()
