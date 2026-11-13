@@ -7,8 +7,8 @@ import io
 import random
 
 st.set_page_config(
-    page_title="AI Roleplay - Character Gallery",
-    page_icon="🖼️",
+    page_title="AI Roleplay - Advanced Character Studio",
+    page_icon="✨",
     layout="centered",
 )
 
@@ -31,7 +31,7 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite รองรับช่องข้อมูลใหม่ทั้งหมด
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -40,14 +40,30 @@ def init_db():
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
             prompt TEXT,
+            personality TEXT,
             lore TEXT,
+            supporting TEXT,
+            first_message TEXT,
             avatar BLOB
         )
     """)
+
+  # ตรวจสอบและอัปเดตคอลัมน์ให้อัตโนมัติ (ป้องกันฐานข้อมูลเก่าพัง)
   cursor.execute("PRAGMA table_info(characters)")
-  char_columns = [col[1] for col in cursor.fetchall()]
-  if "lore" not in char_columns:
-    cursor.execute("ALTER TABLE characters ADD COLUMN lore TEXT")
+  existing_cols = [col[1] for col in cursor.fetchall()]
+
+  cols_to_check = {
+      "personality": "TEXT",
+      "lore": "TEXT",
+      "supporting": "TEXT",
+      "first_message": "TEXT",
+      "avatar": "BLOB",
+  }
+  for col_name, col_type in cols_to_check.items():
+    if col_name not in existing_cols:
+      cursor.execute(
+          f"ALTER TABLE characters ADD COLUMN {col_name} {col_type}"
+      )
 
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
@@ -66,11 +82,6 @@ def init_db():
             image_blob BLOB
         )
     """)
-  cursor.execute("PRAGMA table_info(messages)")
-  msg_columns = [col[1] for col in cursor.fetchall()]
-  if "image_blob" not in msg_columns:
-    cursor.execute("ALTER TABLE messages ADD COLUMN image_blob BLOB")
-
   conn.commit()
   return conn
 
@@ -78,21 +89,21 @@ def init_db():
 conn = init_db()
 cursor = conn.cursor()
 
-# ตรวจสอบตัวละครเริ่มต้น
+# ตรวจสอบตัวละครเริ่มต้น (มาร์ค ต้วน)
 cursor.execute("SELECT COUNT(*) FROM characters")
 if cursor.fetchone()[0] == 0:
   cursor.execute(
-      "INSERT INTO characters (name, prompt, lore, avatar) VALUES (?, ?, ?, ?)",
+      """
+        INSERT INTO characters (name, prompt, personality, lore, supporting, first_message, avatar) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """,
       (
           "มาร์ค ต้วน",
-          (
-              "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่มตัวจริง"
-              " นิสัยอบอุ่น เป็นกันเอง และขี้เล่น"
-          ),
-          (
-              "เป็นเพื่อนสนิทที่รู้จักกันมานาน ชอบแอบเปย์ของกินอร่อยๆ"
-              " และคอยเป็นห่วงเสมอ"
-          ),
+          "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่มตัวจริง",
+          "อบอุ่น เป็นกันเอง ขี้เล่น และใส่ใจแฟนคลับ",
+          "เป็นเพื่อนสนิทที่รู้จักกันมานาน คอยช่วยเหลือกันตลอด",
+          "ผู้จัดการส่วนตัว, เพื่อนร่วมวง",
+          "อ้าว! มาพอดีเลย วันนี้เหนื่อยไหม? อยากกินอะไรเป็นพิเศษเปล่า เดี๋ยวเราเลี้ยงเอง! 😊",
           None,
       ),
   )
@@ -124,19 +135,34 @@ with st.sidebar:
   )
 
   st.divider()
-  st.markdown("### 🛠️ สร้างตัวละครใหม่")
+  st.markdown("### 🛠️ สร้างตัวละครใหม่แบบละเอียด")
 
   with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=False):
-    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น เทพเจ้าแห่งแม่น้ำ...")
+    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น มดอ้วน, ไอดอล...")
     new_prompt = st.text_area(
-        "คาแรคเตอร์สั้นๆ:",
-        placeholder="คุณคือเทพเจ้าขี้เล่น...",
+        "คาแรคเตอร์หลัก (Prompt):",
+        placeholder="คุณคือ...",
+        height=60,
+    )
+    new_personality = st.text_area(
+        "🧠 บุคลิก/นิสัย:",
+        placeholder="เช่น เย็นชาแต่ใจดี, ขี้อ้อน, ปากร้ายใจดี...",
         height=60,
     )
     new_lore = st.text_area(
-        "ข้อมูลเชิงลึก (Lore/ประวัติ):",
-        placeholder="เนื้อเรื่องย่อ ความสัมพันธ์...",
+        "📖 เรื่องราวพื้นหลัง (Background/Lore):",
+        placeholder="ปูมหลัง สถานการณ์ปัจจุบัน ความสัมพันธ์...",
         height=70,
+    )
+    new_supporting = st.text_area(
+        "👥 ตัวละครสนับสนุน (Supporting Characters):",
+        placeholder="ชื่อเพื่อน คนรอบข้าง หรือตัวละครสมทบ...",
+        height=60,
+    )
+    new_first_msg = st.text_area(
+        "💬 ข้อความแรก (Greeting Message):",
+        placeholder="ประโยคแรกที่ตัวละครทักทายคุณ...",
+        height=60,
     )
     new_avatar = st.file_uploader(
         "รูปโปรไฟล์ตัวละคร",
@@ -151,10 +177,35 @@ with st.sidebar:
           avatar_bytes = (
               new_avatar.getvalue() if new_avatar is not None else None
           )
-          cursor.execute(
-              "INSERT INTO characters (name, prompt, lore, avatar) VALUES (?, ?, ?, ?)",
-              (new_name, new_prompt, new_lore, avatar_bytes),
+          default_first_msg = (
+              new_first_msg
+              if new_first_msg
+              else f"สวัสดีครับ ฉันชื่อ {new_name} ยินดีที่ได้คุยกันนะ"
           )
+
+          cursor.execute(
+              """
+                INSERT INTO characters (name, prompt, personality, lore, supporting, first_message, avatar) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+              (
+                  new_name,
+                  new_prompt,
+                  new_personality,
+                  new_lore,
+                  new_supporting,
+                  default_first_msg,
+                  avatar_bytes,
+              ),
+          )
+
+          # ถ้ามีข้อความแรก ให้บันทึกลงตาราง messages เป็นข้อความเริ่มต้นของบอททันที
+          cursor.execute(
+              "INSERT INTO messages (char_name, role, content, image_blob)"
+              " VALUES (?, ?, ?, ?)",
+              (new_name, "assistant", default_first_msg, None),
+          )
+
           conn.commit()
           st.session_state.current_char = new_name
           st.success(f"สร้าง '{new_name}' สำเร็จ!")
@@ -162,7 +213,7 @@ with st.sidebar:
         else:
           st.warning("ชื่อนี้มีอยู่แล้วในระบบ")
       else:
-        st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์ให้ครบ")
+        st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
   st.divider()
   st.subheader("👥 เลือกตัวละคร")
@@ -186,7 +237,7 @@ with st.sidebar:
     st.session_state.current_char = selected_char
     st.rerun()
 
-  # 🖼️ คลังรูปภาพประจำตัวละคร (แก้ไขคีย์ให้แยกตามชื่อตัวละคร ป้องกันลูปค้าง)
+  # คลังรูปภาพประจำตัวละคร
   st.divider()
   st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
   gallery_key = f"gallery_upload_{st.session_state.current_char}"
@@ -197,9 +248,7 @@ with st.sidebar:
       key=gallery_key,
   )
 
-  # ตรวจสอบการอัปโหลดรูปเข้าคลังแบบปลอดภัยไม่ให้เกิดลูป
   if uploaded_gallery_photos:
-    # เช็กว่ารูปเหล่านี้เคยถูกบันทึกไปหรือยังเพื่อป้องกันบันทึกซ้ำซ้อนตอนรีรัน
     cursor.execute(
         "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
         (st.session_state.current_char,),
@@ -207,7 +256,6 @@ with st.sidebar:
     current_db_count = cursor.fetchone()[0]
 
     if len(uploaded_gallery_photos) != current_db_count:
-      # ล้างรูปเก่าแล้วใส่ชุดใหม่เข้าไปทั้งหมด
       cursor.execute(
           "DELETE FROM character_photos WHERE char_name = ?",
           (st.session_state.current_char,),
@@ -248,21 +296,40 @@ with st.sidebar:
       st.session_state.current_char = cursor.fetchone()[0]
       st.rerun()
 
-# ดึงข้อมูลตัวละครปัจจุบัน
+# ดึงข้อมูลตัวละครปัจจุบันทั้งหมดมารวมกันเป็น System Instruction
 cursor.execute(
-    "SELECT prompt, lore, avatar FROM characters WHERE name = ?",
+    """
+    SELECT prompt, personality, lore, supporting, first_message, avatar 
+    FROM characters WHERE name = ?
+""",
     (st.session_state.current_char,),
 )
 char_data = cursor.fetchone()
+
 base_prompt = char_data[0] if char_data and char_data[0] else ""
-char_lore = char_data[1] if char_data and char_data[1] else ""
-char_avatar_blob = char_data[2] if char_data else None
+char_personality = char_data[1] if char_data and char_data[1] else "ไม่มีข้อมูล"
+char_lore = char_data[2] if char_data and char_data[2] else "ไม่มีข้อมูล"
+char_supporting = char_data[3] if char_data and char_data[3] else "ไม่มีข้อมูล"
+char_first_msg = char_data[4] if char_data and char_data[4] else ""
+char_avatar_blob = char_data[5] if char_data else None
 
 char_avatar_img = None
 if char_avatar_blob:
   char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-full_system_prompt = f"{base_prompt}\n\n[ข้อมูลและประวัติเชิงลึกของตัวละคร (Lore)]:\n{char_lore if char_lore else 'ไม่มีข้อมูลพิเศษ'}"
+# ประกอบร่าง System Instruction แบบละเอียดสมบูรณ์
+full_system_prompt = f"""
+{base_prompt}
+
+[บุคลิกและนิสัย]:
+{char_personality}
+
+[เรื่องราวพื้นหลัง (Background/Lore)]:
+{char_lore}
+
+[ตัวละครสนับสนุนรอบตัว]:
+{char_supporting}
+"""
 
 if "นิยาย" in chat_mode:
   roleplay_instruction = (
@@ -281,6 +348,19 @@ else:
       "3. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์"
   )
   temp_val = 0.9
+
+# ตรวจสอบว่ามีประวัติแชทหรือยัง ถ้ายังให้ดึงข้อความแรกใส่ลงไป
+cursor.execute(
+    "SELECT COUNT(*) FROM messages WHERE char_name = ?",
+    (st.session_state.current_char,),
+)
+if cursor.fetchone()[0] == 0 and char_first_msg:
+  cursor.execute(
+      "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?,"
+      " ?, ?)",
+      (st.session_state.current_char, "assistant", char_first_msg, None),
+  )
+  conn.commit()
 
 # ดึงข้อความแชท
 cursor.execute(
