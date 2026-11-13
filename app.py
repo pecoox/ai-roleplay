@@ -757,7 +757,7 @@ with st.sidebar:
     if users_list:
       for u_name, u_admin in users_list:
         with st.container(border=True):
-          role_label = "🛡️ Admin" : u_admin == 1 else "👤 User"
+          role_label = "🛡️ Admin" if u_admin == 1 else "👤 User"
           st.markdown(f"**ยูสเซอร์:** `{u_name}` ({role_label})")
 
           # ฟอร์มแก้ไขรหัสผ่านและลบบัญชี
@@ -835,7 +835,11 @@ if not st.session_state.in_chat:
     if all_users:
       for u_name, u_admin in all_users:
         with st.container(border=True):
-          role_label = "🛡️ ผู้ดูแลระบบ (Admin)" if u_admin == 1 else "👤 ผู้ใช้งานทั่วไป (User)"
+          role_label = (
+              "🛡️ ผู้ดูแลระบบ (Admin)"
+              if u_admin == 1
+              else "👤 ผู้ใช้งานทั่วไป (User)"
+          )
           st.markdown(f"### ชื่อผู้ใช้: `{u_name}` — *({role_label})*")
 
           with st.form(f"main_manage_user_{u_name}"):
@@ -895,7 +899,10 @@ if not st.session_state.in_chat:
   st.divider()
 
   if not all_chars:
-    st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาเข้าสู่ระบบด้วยบัญชี Admin เพื่อสร้างตัวละครหลักครับ!")
+    st.info(
+        "📭 ยังไม่มีตัวละครในระบบ กรุณาเข้าสู่ระบบด้วยบัญชี Admin"
+        " เพื่อสร้างตัวละครหลักครับ!"
+    )
   else:
     cols = st.columns(3)
     for idx, c_name in enumerate(all_chars):
