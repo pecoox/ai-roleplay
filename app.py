@@ -138,9 +138,10 @@ with st.sidebar:
         placeholder="เนื้อเรื่องย่อ ความสัมพันธ์...",
         height=70,
     )
-    # 🖼️ เพิ่ม 'webp' ให้รองรับการอัปโหลดไฟล์รูปภาพทุกตระกูล
     new_avatar = st.file_uploader(
-        "รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg", "webp"]
+        "รูปโปรไฟล์ตัวละคร",
+        type=["png", "jpg", "jpeg", "webp"],
+        key="new_char_avatar_upload",
     )
 
     if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
@@ -185,24 +186,40 @@ with st.sidebar:
     st.session_state.current_char = selected_char
     st.rerun()
 
-  # คลังรูปภาพของตัวละคร (รองรับ webp เช่นกัน)
+  # 🖼️ คลังรูปภาพประจำตัวละคร (แก้ไขคีย์ให้แยกตามชื่อตัวละคร ป้องกันลูปค้าง)
   st.divider()
   st.subheader(f"🖼️ คลังรูปของ: {st.session_state.current_char}")
+  gallery_key = f"gallery_upload_{st.session_state.current_char}"
   uploaded_gallery_photos = st.file_uploader(
       "อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)",
       type=["png", "jpg", "jpeg", "webp"],
       accept_multiple_files=True,
-      key="gallery_upload",
+      key=gallery_key,
   )
+
+  # ตรวจสอบการอัปโหลดรูปเข้าคลังแบบปลอดภัยไม่ให้เกิดลูป
   if uploaded_gallery_photos:
-    for photo in uploaded_gallery_photos:
+    # เช็กว่ารูปเหล่านี้เคยถูกบันทึกไปหรือยังเพื่อป้องกันบันทึกซ้ำซ้อนตอนรีรัน
+    cursor.execute(
+        "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
+        (st.session_state.current_char,),
+    )
+    current_db_count = cursor.fetchone()[0]
+
+    if len(uploaded_gallery_photos) != current_db_count:
+      # ล้างรูปเก่าแล้วใส่ชุดใหม่เข้าไปทั้งหมด
       cursor.execute(
-          "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-          (st.session_state.current_char, photo.getvalue()),
+          "DELETE FROM character_photos WHERE char_name = ?",
+          (st.session_state.current_char,),
       )
-    conn.commit()
-    st.success("เพิ่มรูปเข้าคลังสำเร็จ!")
-    st.rerun()
+      for photo in uploaded_gallery_photos:
+        cursor.execute(
+            "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
+            (st.session_state.current_char, photo.getvalue()),
+        )
+      conn.commit()
+      st.success("อัปเดตคลังรูปภาพสำเร็จ!")
+      st.rerun()
 
   cursor.execute(
       "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
