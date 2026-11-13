@@ -443,7 +443,7 @@ with st.sidebar:
   else:
     sidebar_action = "เลือกตัวละคร"
 
-  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ผูกให้ตรงกันแบบไดนามิก)
+  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
   if all_chars:
     st.divider()
     selected_char = st.selectbox(
@@ -729,7 +729,7 @@ with st.sidebar:
     else:
       st.caption("ยังไม่มีภารกิจในระบบ")
 
-  # 5. จัดการคลังรูปภาพ (Admin Only)
+  # 5. จัดการคลังรูปภาพ (Admin Only) - แก้ไขปัญหาโหลดรูปไม่ตรงกับตัวละครที่เลือก
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
@@ -744,6 +744,7 @@ with st.sidebar:
     )
 
     if uploaded_gallery_photos:
+      # ดึงเฉพาะรูปของตัวละครปัจจุบันมานับจำนวน
       cursor.execute(
           "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
           (active_char,),
@@ -781,7 +782,7 @@ with st.sidebar:
             conn.commit()
             st.rerun()
     else:
-      st.caption("ยังไม่มีรูปภาพในคลัง")
+      st.caption("ยังไม่มีรูปภาพในคลังของตัวละครนี้")
 
   # 6. จัดการผู้ใช้งานระบบ (Admin Only)
   elif is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
