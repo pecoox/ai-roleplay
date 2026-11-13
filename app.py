@@ -45,12 +45,12 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบอัปเดตโครงสร้างอัตโนมัติ
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # ตารางผู้ใช้งานระบบ (เพิ่มคอลัมน์ is_admin)
+  # ตารางผู้ใช้งานระบบ
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -58,6 +58,12 @@ def init_db():
             is_admin INTEGER DEFAULT 0
         )
     """)
+
+  # ตรวจสอบว่ามีคอลัมน์ is_admin หรือยัง (ป้องกัน Error กรณีฐานข้อมูลเก่า)
+  cursor.execute("PRAGMA table_info(users)")
+  columns = [col[1] for col in cursor.fetchall()]
+  if "is_admin" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
 
   # ตัวละครหลัก (ส่วนกลาง ทุกคนเห็นเหมือนกัน)
   cursor.execute("""
@@ -191,9 +197,12 @@ if not st.session_state.logged_in:
           )
           row = cursor.fetchone()
           if row and row[0] == hash_password(l_pass):
+            # บัญชีชื่อ admin หรือถูกตั้งค่าเป็น 1 ให้เป็น admin เสมอ
+            admin_status = 1 if l_user.lower() == "admin" else row[1]
+
             st.session_state.logged_in = True
             st.session_state.username = l_user
-            st.session_state.is_admin = bool(row[1])
+            st.session_state.is_admin = bool(admin_status)
             st.success("เข้าสู่ระบบสำเร็จ!")
             st.rerun()
           else:
@@ -215,10 +224,12 @@ if not st.session_state.logged_in:
           if cursor.fetchone():
             st.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
           else:
-            # เช็คว่ามีผู้ใช้คนแรกในระบบไหม ถ้ายังไม่มีให้คนแรกเป็น Admin อัตโนมัติ
+            # ถ้าสมัครชื่อ admin หรือเป็นคนแรกในระบบ ให้เป็น Admin อัตโนมัติ
             cursor.execute("SELECT COUNT(*) FROM users")
             user_count = cursor.fetchone()[0]
-            assigned_admin = 1 if user_count == 0 else 0
+            assigned_admin = (
+                1 if (r_user.lower() == "admin" or user_count == 0) else 0
+            )
 
             cursor.execute(
                 "INSERT INTO users (username, password, is_admin) VALUES (?, ?,"
@@ -228,7 +239,7 @@ if not st.session_state.logged_in:
             conn.commit()
             if assigned_admin:
               st.success(
-                  "สมัครสมาชิกสำเร็จ! (คุณได้รับสิทธิ์เป็น Admin อัตโนมัติเพราะเป็นบัญชีแรก)"
+                  "สมัครสมาชิกสำเร็จ! (บัญชีนี้ได้รับสิทธิ์เป็น Admin เรียบร้อยแล้ว)"
               )
             else:
               st.success(
@@ -243,6 +254,9 @@ if not st.session_state.logged_in:
 # 🌟 ระบบหลักหลังเข้าสู่ระบบแล้ว
 # ==========================================
 current_user = st.session_state.username
+# ให้ชื่อ admin เป็น admin เสมอ
+if current_user.lower() == "admin":
+  st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
 
 # ดึงรายชื่อตัวละครส่วนกลางทั้งหมด
@@ -1180,7 +1194,7 @@ if st.session_state.in_chat and st.session_state.current_char:
           cursor.execute(
               """
               UPDATE character_status 
-              SET affection_score = ?, relationship_level = ? 
+              `SET affection_score = ?, relationship_level = ? 
               WHERE username = ? AND char_name = ?
           """,
               (
