@@ -5,14 +5,15 @@ import time
 from PIL import Image
 import io
 import random
+import json
 
 st.set_page_config(
-    page_title="AI Roleplay - Advanced Character Studio",
-    page_icon="✨",
+    page_title="AI Roleplay - Affection & Quests Studio",
+    page_icon="💖",
     layout="centered",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม
+# 🎨 ดีไซน์ CSS พรีเมียมและแถบสถานะความชอบ
 st.markdown(
     """
     <style>
@@ -25,13 +26,22 @@ st.markdown(
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* กล่องแสดงสถานะความชอบ */
+    .affection-box {
+        background: linear-gradient(135deg, rgba(255,105,180,0.1), rgba(138,43,226,0.1));
+        border: 1px solid rgba(255,105,180,0.3);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 15px;
+    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite รองรับช่องข้อมูลใหม่ทั้งหมด
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite รองรับระบบความชอบและภารกิจ
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -48,22 +58,25 @@ def init_db():
         )
     """)
 
-  # ตรวจสอบและอัปเดตคอลัมน์ให้อัตโนมัติ (ป้องกันฐานข้อมูลเก่าพัง)
-  cursor.execute("PRAGMA table_info(characters)")
-  existing_cols = [col[1] for col in cursor.fetchall()]
+  # ตารางเก็บสถานะความสัมพันธ์และความชอบของผู้ใช้กับตัวละครแต่ละตัว
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS character_status (
+            char_name TEXT PRIMARY KEY,
+            affection_score INTEGER DEFAULT 0,
+            relationship_level TEXT DEFAULT 'คนแปลกหน้า'
+        )
+    """)
 
-  cols_to_check = {
-      "personality": "TEXT",
-      "lore": "TEXT",
-      "supporting": "TEXT",
-      "first_message": "TEXT",
-      "avatar": "BLOB",
-  }
-  for col_name, col_type in cols_to_check.items():
-    if col_name not in existing_cols:
-      cursor.execute(
-          f"ALTER TABLE characters ADD COLUMN {col_name} {col_type}"
-      )
+  # ตารางเก็บภารกิจ (Quests)
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            char_name TEXT,
+            task_desc TEXT,
+            is_completed INTEGER DEFAULT 0,
+            reward_points INTEGER DEFAULT 10
+        )
+    """)
 
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
@@ -101,10 +114,44 @@ if cursor.fetchone()[0] == 0:
           "มาร์ค ต้วน",
           "คุณคือ มาร์ค ต้วน (Mark Tuan) ศิลปินหนุ่มตัวจริง",
           "อบอุ่น เป็นกันเอง ขี้เล่น และใส่ใจแฟนคลับ",
-          "เป็นเพื่อนสนิทที่รู้จักกันมานาน คอยช่วยเหลือกันตลอด",
-          "ผู้จัดการส่วนตัว, เพื่อนร่วมวง",
-          "อ้าว! มาพอดีเลย วันนี้เหนื่อยไหม? อยากกินอะไรเป็นพิเศษเปล่า เดี๋ยวเราเลี้ยงเอง! 😊",
+          "เป็นคนแปลกหน้าที่เพิ่งบังเอิญเจอกันที่ร้านกาแฟ",
+          "ผู้จัดการส่วนตัว",
+          "อ้าว... ขอโทษทีครับ เดินชนเมื่อกี้เจ็บตรงไหนหรือเปล่าครับ? (มองหน้าด้วยความสงสัยนิดๆ)",
           None,
+      ),
+  )
+  # เพิ่มสถานะความชอบเริ่มต้น
+  cursor.execute(
+      """
+        INSERT OR IGNORE INTO character_status (char_name, affection_score, relationship_level) 
+        VALUES (?, ?, ?)
+    """,
+      ("มาร์ค ต้วน", 5, "คนแปลกหน้า"),
+  )
+
+  # เพิ่มภารกิจเริ่มต้น
+  cursor.execute(
+      """
+        INSERT INTO quests (char_name, task_desc, is_completed, reward_points) 
+        VALUES (?, ?, ?, ?)
+    """,
+      (
+          "มาร์ค ต้วน",
+          "แนะนำตัวให้เขารู้จักอย่างเป็นทางการ",
+          0,
+          15,
+      ),
+  )
+  cursor.execute(
+      """
+        INSERT INTO quests (char_name, task_desc, is_completed, reward_points) 
+        VALUES (?, ?, ?, ?)
+    """,
+      (
+          "มาร์ค ต้วน",
+          "ทำให้เขายิ้มหรือหัวเราะออกมาให้ได้",
+          0,
+          20,
       ),
   )
   conn.commit()
@@ -135,10 +182,10 @@ with st.sidebar:
   )
 
   st.divider()
-  st.markdown("### 🛠️ สร้างตัวละครใหม่แบบละเอียด")
+  st.markdown("### 🛠️ สร้างตัวละครใหม่")
 
   with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=False):
-    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น มดอ้วน, ไอดอล...")
+    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น อาจารย์หนุ่ม, เพื่อนร่วมงาน...")
     new_prompt = st.text_area(
         "คาแรคเตอร์หลัก (Prompt):",
         placeholder="คุณคือ...",
@@ -146,28 +193,36 @@ with st.sidebar:
     )
     new_personality = st.text_area(
         "🧠 บุคลิก/นิสัย:",
-        placeholder="เช่น เย็นชาแต่ใจดี, ขี้อ้อน, ปากร้ายใจดี...",
+        placeholder="เช่น เข้มงวด, เป็นกันเอง, สุภาพ...",
         height=60,
     )
     new_lore = st.text_area(
         "📖 เรื่องราวพื้นหลัง (Background/Lore):",
-        placeholder="ปูมหลัง สถานการณ์ปัจจุบัน ความสัมพันธ์...",
+        placeholder="สถานะเริ่มต้น ความสัมพันธ์...",
         height=70,
     )
     new_supporting = st.text_area(
-        "👥 ตัวละครสนับสนุน (Supporting Characters):",
-        placeholder="ชื่อเพื่อน คนรอบข้าง หรือตัวละครสมทบ...",
-        height=60,
+        "👥 ตัวละครสนับสนุน:", placeholder="คนรอบข้าง...", height=60
     )
     new_first_msg = st.text_area(
         "💬 ข้อความแรก (Greeting Message):",
-        placeholder="ประโยคแรกที่ตัวละครทักทายคุณ...",
+        placeholder="ประโยคแรกที่ทักทาย...",
         height=60,
     )
     new_avatar = st.file_uploader(
         "รูปโปรไฟล์ตัวละคร",
         type=["png", "jpg", "jpeg", "webp"],
-        key="new_char_avatar_upload",
+        key="new_avatar_up",
+    )
+
+    # ช่องใส่ภารกิจเริ่มต้นตอนสร้างตัวละคร
+    st.markdown("---")
+    st.markdown("**🎯 กำหนดภารกิจเริ่มต้น (2 ภารกิจ)**")
+    q1 = st.text_input(
+        "ภารกิจที่ 1:", placeholder="เช่น ทักทายเขาอย่างสุภาพ"
+    )
+    q2 = st.text_input(
+        "ภารกิจที่ 2:", placeholder="เช่น ชวนคุยเรื่องงานหรือเรื่องทั่วไป"
     )
 
     if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
@@ -180,7 +235,7 @@ with st.sidebar:
           default_first_msg = (
               new_first_msg
               if new_first_msg
-              else f"สวัสดีครับ ฉันชื่อ {new_name} ยินดีที่ได้คุยกันนะ"
+              else f"สวัสดีครับ ฉันชื่อ {new_name}"
           )
 
           cursor.execute(
@@ -199,7 +254,27 @@ with st.sidebar:
               ),
           )
 
-          # ถ้ามีข้อความแรก ให้บันทึกลงตาราง messages เป็นข้อความเริ่มต้นของบอททันที
+          # สร้างสถานะความชอบเริ่มต้น
+          cursor.execute(
+              """
+                INSERT INTO character_status (char_name, affection_score, relationship_level) 
+                VALUES (?, ?, ?)
+            """,
+              (new_name, 0, "คนแปลกหน้า"),
+          )
+
+          # บันทึกภารกิจ
+          if q1:
+            cursor.execute(
+                "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, 15)",
+                (new_name, q1),
+            )
+          if q2:
+            cursor.execute(
+                "INSERT INTO quests (char_name, task_desc, is_completed, reward_points) VALUES (?, ?, 0, 20)",
+                (new_name, q2),
+            )
+
           cursor.execute(
               "INSERT INTO messages (char_name, role, content, image_blob)"
               " VALUES (?, ?, ?, ?)",
@@ -269,13 +344,6 @@ with st.sidebar:
       st.success("อัปเดตคลังรูปภาพสำเร็จ!")
       st.rerun()
 
-  cursor.execute(
-      "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
-      (st.session_state.current_char,),
-  )
-  photo_count = cursor.fetchone()[0]
-  st.caption(f"📁 รูปในคลังตอนนี้: {photo_count} รูป")
-
   if len(char_list) > 1:
     st.divider()
     if st.button("🗑️ ลบตัวละครนี้", use_container_width=True):
@@ -291,12 +359,20 @@ with st.sidebar:
           "DELETE FROM character_photos WHERE char_name = ?",
           (st.session_state.current_char,),
       )
+      cursor.execute(
+          "DELETE FROM character_status WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      cursor.execute(
+          "DELETE FROM quests WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
       conn.commit()
       cursor.execute("SELECT name FROM characters LIMIT 1")
       st.session_state.current_char = cursor.fetchone()[0]
       st.rerun()
 
-# ดึงข้อมูลตัวละครปัจจุบันทั้งหมดมารวมกันเป็น System Instruction
+# ดึงข้อมูลตัวละครปัจจุบัน
 cursor.execute(
     """
     SELECT prompt, personality, lore, supporting, first_message, avatar 
@@ -317,7 +393,25 @@ char_avatar_img = None
 if char_avatar_blob:
   char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-# ประกอบร่าง System Instruction แบบละเอียดสมบูรณ์
+# ดึงสถานะความชอบ
+cursor.execute(
+    "SELECT affection_score, relationship_level FROM character_status WHERE char_name = ?",
+    (st.session_state.current_char,),
+)
+status_row = cursor.fetchone()
+if not status_row:
+  cursor.execute(
+      "INSERT INTO character_status (char_name, affection_score, relationship_level) VALUES (?, 0, 'คนแปลกหน้า')",
+      (st.session_state.current_char,),
+  )
+  conn.commit()
+  current_affection = 0
+  current_rel_level = "คนแปลกหน้า"
+else:
+  current_affection = status_row[0]
+  current_rel_level = status_row[1]
+
+# คำสั่งระบบประเมินความชอบและภารกิจด้วย AI บังคับตอบเป็น JSON ด้านหลัง
 full_system_prompt = f"""
 {base_prompt}
 
@@ -329,6 +423,9 @@ full_system_prompt = f"""
 
 [ตัวละครสนับสนุนรอบตัว]:
 {char_supporting}
+
+[สถานะความสัมพันธ์ปัจจุบันกับผู้ใช้]: ระดับ "{current_rel_level}" (คะแนนความชอบ: {current_affection}/100)
+*คำสั่งพิเศษ*: คุณต้องสวมบทบาทตามระดับความสัมพันธ์นี้จริงๆ (เช่น ถ้าเป็นคนแปลกหน้า ให้มีความระแวง เป็นทางการ หรือเว้นระยะห่างตามคาแรคเตอร์ และเมื่อคะแนนเพิ่มขึ้น ความสัมพันธ์สามารถพัฒนาไปตามความเหมาะสมของคาแรคเตอร์ เช่น เพื่อนสนิท, ลูกศิษย์, คนรู้ใจ, คู่หู หรือคนรัก (ไม่จำเป็นต้องเป็นคนรักเสมอไป ให้ AI พิจารณาตามความเหมาะสมของคาแรคเตอร์))
 """
 
 if "นิยาย" in chat_mode:
@@ -336,20 +433,22 @@ if "นิยาย" in chat_mode:
       f"{full_system_prompt}\n\n[กฎการตอบ]:\n"
       "1. เขียนตอบสไตล์นิยายบรรยาย มีท่าทาง สีหน้า ความรู้สึก (ใช้เครื่องหมาย *"
       " ครอบการกระทำ)\n"
-      "2. สวมบทบาท 100% ห้ามบอกว่าเป็น AI\n"
-      "3. เมื่อจบตอน ให้ตั้งคำถามหรือเปิดฉากเพื่อให้ผู้ใช้เลือกตอบต่อ"
+      "2. สวมบทบาท 100% ตามระดับความสัมพันธ์ปัจจุบัน ห้ามหลุดคาแรคเตอร์\n"
+      "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
+      '{"score_change": [ตัวเลขคะแนนที่จะบวกเพิ่ม เช่น 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จในตาราง หรือ null ถ้าไม่มีภารกิจไหนเสร็จ]}'
   )
   temp_val = 1.1
 else:
   roleplay_instruction = (
       f"{full_system_prompt}\n\n[กฎการตอบ]:\n"
-      "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี\n"
-      "2. ห้ามใช้คำพูดเชิงบอทหรือคำทางการ\n"
-      "3. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์"
+      "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี ตามระดับความสัมพันธ์ปัจจุบัน\n"
+      "2. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์\n"
+      "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
+      '{"score_change": [ตัวเลขคะแนนที่จะบวกเพิ่ม เช่น 2 ถึง 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จในตาราง หรือ null ถ้าไม่มีภารกิจไหนเสร็จ]}'
   )
   temp_val = 0.9
 
-# ตรวจสอบว่ามีประวัติแชทหรือยัง ถ้ายังให้ดึงข้อความแรกใส่ลงไป
+# ตรวจสอบข้อความแรก
 cursor.execute(
     "SELECT COUNT(*) FROM messages WHERE char_name = ?",
     (st.session_state.current_char,),
@@ -373,10 +472,10 @@ for row in cursor.fetchall():
   if row[2]:
     img_obj = Image.open(io.BytesIO(row[2]))
   current_messages.append(
-      {"role": row[0], "content": row[1], "image": img_obj}
+      {"role": role[0], "content": row[1], "image": img_obj}
   )
 
-# แสดงหัวข้อและรูปโปรไฟล์ตัวละคร
+# --- ส่วนแสดงผลหน้าจอหลัก ---
 col_av, col_title = st.columns([1, 6])
 with col_av:
   if char_avatar_img:
@@ -385,6 +484,32 @@ with col_av:
     st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
 with col_title:
   st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
+
+# 💖 แผงแสดงหลอดคะแนนความชอบและสถานะ
+st.markdown(
+    f"""
+    <div class="affection-box">
+        <b>💖 สถานะความสัมพันธ์:</b> <span style="color: #ff4b4b; font-weight: bold;">{current_rel_level}</span> 
+        &nbsp;|&&nbsp; <b>คะแนนความชอบ:</b> <code>{current_affection} / 100</code>
+    </div>
+""",
+    unsafe_allow_html=True,
+)
+
+# 🎯 ปุ่มกดดูภารกิจ (Quest Log) ในรูปแบบ Expander
+with st.expander("🎯 เปิดดูภารกิจที่ต้องทำ (Quest Log)", expanded=False):
+  cursor.execute(
+      "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
+      (st.session_state.current_char,),
+  )
+  quests = cursor.fetchall()
+  if quests:
+    for q_id, desc, completed, pts in quests:
+      status_icon = "✅ สำเร็จแล้ว" f"(+{pts} แต้ม)" if completed else "⏳ กำลังดำเนินการ"
+      st.markdown(f"- **[ภารกิจที่ {q_id}]** {desc} — *สถานะ: {status_icon}*")
+  else:
+    st.caption("ยังไม่มีภารกิจสำหรับตัวละครนี้")
+
 st.divider()
 
 # แสดงประวัติแชท
@@ -441,9 +566,60 @@ if user_input := st.chat_input(
         )
 
         response = chat.send_message(user_input)
-        bot_response = response.text
+        raw_text = response.text
 
-        # สุ่มดึงรูปจากคลังรูปภาพของตัวละครนี้มาส่ง (30%)
+        # แยกส่วนข้อความแชทกับ JSON ประเมินผลคะแนน
+        try:
+          if "{" in raw_text and "}" in raw_text:
+            parts = raw_text.rsplit("{", 1)
+            bot_response = parts[0].strip()
+            json_str = "{" + parts[1]
+            eval_data = json.loads(json_str)
+          else:
+            bot_response = raw_text
+            eval_data = {
+                "score_change": 3,
+                "new_level": current_rel_level,
+                "quest_update": None,
+            }
+        except Exception:
+          bot_response = raw_text
+          eval_data = {
+              "score_change": 3,
+              "new_level": current_rel_level,
+              "quest_update": None,
+          }
+
+        # อัปเดตคะแนนความชอบลงฐานข้อมูล
+        score_inc = eval_data.get("score_change", 3)
+        new_lvl = eval_data.get("new_level", current_rel_level)
+        completed_q_id = eval_data.get("quest_update", None)
+
+        updated_score = min(100, current_affection + score_inc)
+
+        cursor.execute(
+            """
+            UPDATE character_status 
+            SET affection_score = ?, relationship_level = ? 
+            WHERE char_name = ?
+        """,
+            (updated_score, new_lvl, st.session_state.current_char),
+        )
+
+        # ถ้ามีภารกิจสำเร็จ
+        if completed_q_id:
+          cursor.execute(
+              """
+                UPDATE quests 
+                SET is_completed = 1 
+                WHERE id = ? AND char_name = ?
+            """,
+              (completed_q_id, st.session_state.current_char),
+          )
+
+        conn.commit()
+
+        # สุ่มรูปภาพจากคลัง (30%)
         cursor.execute(
             "SELECT photo FROM character_photos WHERE char_name = ?",
             (st.session_state.current_char,),
@@ -469,8 +645,8 @@ if user_input := st.chat_input(
           if attempt == max_retries - 1 or not (
               "503" in error_msg or "UNAVAILABLE" in error_msg
           ):
-            bot_response = None
-            message_placeholder.error(f"เกิดข้อผิดพลาด: {error_msg}")
+            bot_response = "ขออภัยครับ เกิดข้อผิดพลาดในการประมวลผล"
+            break
 
     if bot_response:
       message_placeholder.markdown(bot_response)
@@ -490,3 +666,4 @@ if user_input := st.chat_input(
           ),
       )
       conn.commit()
+      st.rerun()
