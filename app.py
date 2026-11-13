@@ -41,12 +41,11 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite (รองรับตารางตัวละครเสริมแยกรายบุคคล)
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # ตารางตัวละครหลัก
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -58,7 +57,6 @@ def init_db():
         )
     """)
 
-  # ตารางตัวละครเสริม (Supporting Characters) แยกรายละเอียด
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +239,6 @@ with st.sidebar:
       else:
         st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์หลักให้ครบ")
 
-  # ส่วนจัดการตัวละครหลัก / เพิ่มตัวละครเสริม / เพิ่มภารกิจ / คลังรูปภาพใน Sidebar
   if all_chars:
     st.divider()
     st.subheader("👥 เลือกตัวละครหลัก")
@@ -261,14 +258,13 @@ with st.sidebar:
     ):
       st.session_state.current_char = selected_char
 
-    # 👥 ฟอร์มเพิ่มตัวละครเสริม (Supporting Characters แบบเจาะลึกรายคน)
     with st.expander(
         f"👥 เพิ่มตัวละครเสริมให้: {st.session_state.current_char}",
         expanded=False,
     ):
       with st.form("add_sub_char_form", clear_on_submit=True):
         sub_name = st.text_input(
-            "ชื่อตัวละครเสริม:", placeholder="เช่น บоб เพื่อนสนิท..."
+            "ชื่อตัวละครเสริม:", placeholder="เช่น เพื่อนสนิท..."
         )
         sub_prompt = st.text_area(
             "คาแรคเตอร์ตัวละครเสริม:", placeholder="คุณคือเพื่อนสนิท...", height=60
@@ -312,7 +308,6 @@ with st.sidebar:
           st.success(f"เพิ่มตัวละครเสริม '{sub_name}' สำเร็จ!")
           st.rerun()
 
-    # 🎯 ช่องเพิ่มภารกิจ
     st.markdown(f"### 🎯 เพิ่มภารกิจให้: `{st.session_state.current_char}`")
     with st.form("add_quest_form_sidebar", clear_on_submit=True):
       new_quest_desc = st.text_input(
@@ -331,7 +326,6 @@ with st.sidebar:
         st.success("เพิ่มภารกิจสำเร็จ!")
         st.rerun()
 
-    # 🖼️ คลังรูปภาพของตัวละคร
     st.markdown(f"### 🖼️ คลังรูปของ: `{st.session_state.current_char}`")
     st.caption("อัปโหลดรูปภาพเข้าคลัง (ให้ตัวละครสุ่มส่ง)")
     gallery_key = f"gallery_upload_{st.session_state.current_char}"
@@ -481,7 +475,6 @@ if not st.session_state.in_chat:
           st.markdown(f"**✨ บุคลิก/นิสัย:** {p_data[1]}")
           st.markdown(f"**📖 เรื่องราวพื้นหลัง (Lore):** {p_data[2]}")
 
-          # ดึงรายชื่อตัวละครเสริมมาแสดงในหน้าพรีวิว
           cursor.execute(
               "SELECT sub_name, sub_personality FROM supporting_characters WHERE char_name = ?",
               (prev_name,),
@@ -531,7 +524,6 @@ if st.session_state.in_chat and st.session_state.current_char:
   if char_avatar_blob:
     char_avatar_img = Image.open(io.BytesIO(char_avatar_blob))
 
-  # ดึงข้อมูลตัวละครเสริมทั้งหมดมารวมใน System Prompt
   cursor.execute(
       "SELECT sub_name, sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE char_name = ?",
       (st.session_state.current_char,),
@@ -622,7 +614,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  col_av, col_title = st.columns([1, 6])
+  col_av, col_title, col_reset = st.columns([1, 5, 2])
   with col_av:
     if char_avatar_img:
       st.image(char_avatar_img, width=60)
@@ -630,6 +622,29 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
   with col_title:
     st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
+  with col_reset:
+    # 🔄 ปุ่มรีเซ็ตแชทและเริ่มคุยใหม่
+    if st.button("🔄 รีเซ็ตแชทใหม่", use_container_width=True):
+      cursor.execute(
+          "DELETE FROM messages WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      cursor.execute(
+          """
+            UPDATE character_status 
+            SET affection_score = 0, relationship_level = 'คนแปลกหน้า' 
+            WHERE char_name = ?
+        """,
+          (st.session_state.current_char,),
+      )
+      if char_first_msg:
+        cursor.execute(
+            "INSERT INTO messages (char_name, role, content, image_blob) VALUES (?, ?, ?, ?)",
+            (st.session_state.current_char, "assistant", char_first_msg, None),
+        )
+      conn.commit()
+      st.success("รีเซ็ตบทสนทนาสำเร็จ!")
+      st.rerun()
 
   st.markdown(
       f"""
