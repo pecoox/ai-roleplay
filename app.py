@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS ดั้งเดิม
+# 🎨 ดีไซน์ CSS พรีเมียม
 st.markdown(
     """
     <style>
@@ -992,7 +992,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก (ดีไซน์ดั้งเดิม ขนาดใหญ่เต็มตา)
+# 🏠 หน้าแรก
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1294,76 +1294,125 @@ if st.session_state.in_chat and st.session_state.current_char:
     with st.chat_message("user", avatar="👤"):
       st.markdown(user_input)
 
+    # 🛠️ ตรวจสอบคำสั่งพิเศษแบบมีเครื่องหมาย / นำหน้า
+    is_cheat = False
+    bot_response = ""
+    score_change = 0
+    completed_q_id = None
+
+    if user_input.startswith("/+ชอบ "):
+      is_cheat = True
+      try:
+        score_change = int(user_input.replace("/+ชอบ ", "").strip())
+        bot_response = (
+            f"*(ระบบทดสอบ: เพิ่มแต้มความชอบให้ {score_change} คะแนนเรียบร้อย)*"
+        )
+      except Exception:
+        bot_response = "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ชอบ 20`)*"
+    elif user_input.startswith("/+ผ่านภารกิจ "):
+      is_cheat = True
+      try:
+        completed_q_id = int(user_input.replace("/+ผ่านภารกิจ ", "").strip())
+        cursor.execute(
+            "SELECT task_desc, reward_points FROM quests WHERE id = ? AND char_name = ?",
+            (completed_q_id, st.session_state.current_char),
+        )
+        q_data = cursor.fetchone()
+        if q_data:
+          bot_response = f"*(ระบบทดสอบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
+        else:
+          bot_response = (
+              f"*(ระบบทดสอบ: ไม่พบภารกิจหมายเลข #{completed_q_id} ในระบบ)*"
+          )
+          completed_q_id = None
+      except Exception:
+        bot_response = (
+            "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ผ่านภารกิจ 1`)*"
+        )
+
     with st.chat_message(
         "assistant", avatar=char_avatar_img if char_avatar_img else "✨"
     ):
       message_placeholder = st.empty()
-      message_placeholder.markdown("กำลังพิมพ์...")
 
-      bot_response = None
-      eval_data = {}
-      max_retries = 3
+      if is_cheat:
+        time.sleep(0.5)
+        message_placeholder.markdown(bot_response)
+        eval_data = {
+            "score_change": score_change,
+            "new_level": current_rel_level,
+            "quest_update": completed_q_id,
+        }
+      else:
+        message_placeholder.markdown("กำลังพิมพ์...")
 
-      for attempt in range(max_retries):
-        try:
-          formatted_history = [
-              {
-                  "role": "user" if m["role"] == "user" else "model",
-                  "parts": [{"text": m["content"]}],
-              }
-              for m in current_messages
-          ]
+        bot_response = None
+        eval_data = {}
+        max_retries = 3
 
-          chat = client.chats.create(
-              model=model_name,
-              history=formatted_history if formatted_history else None,
-              config={
-                  "system_instruction": roleplay_instruction,
-                  "temperature": 1.1,
-              },
-          )
+        for attempt in range(max_retries):
+          try:
+            formatted_history = [
+                {
+                    "role": "user" if m["role"] == "user" else "model",
+                    "parts": [{"text": m["content"]}],
+                }
+                for m in current_messages
+            ]
 
-          response = chat.send_message(user_input)
-          raw_text = response.text
+            chat = client.chats.create(
+                model=model_name,
+                history=formatted_history if formatted_history else None,
+                config={
+                    "system_instruction": roleplay_instruction,
+                    "temperature": 1.1,
+                },
+            )
 
-          if "{" in raw_text and "}" in raw_text:
-            parts = raw_text.rsplit("{", 1)
-            bot_response = parts[0].strip()
-            try:
-              eval_data = json.loads("{" + parts[1])
-            except Exception:
+            response = chat.send_message(user_input)
+            raw_text = response.text
+
+            if "{" in raw_text and "}" in raw_text:
+              parts = raw_text.rsplit("{", 1)
+              bot_response = parts[0].strip()
+              try:
+                eval_data = json.loads("{" + parts[1])
+              except Exception:
+                eval_data = {
+                    "score_change": 2,
+                    "new_level": current_rel_level,
+                    "quest_update": None,
+                }
+            else:
+              bot_response = raw_text
               eval_data = {
                   "score_change": 2,
                   "new_level": current_rel_level,
                   "quest_update": None,
               }
-          else:
-            bot_response = raw_text
-            eval_data = {
-                "score_change": 2,
-                "new_level": current_rel_level,
-                "quest_update": None,
-            }
-          break
+            break
 
-        except Exception as e:
-          if attempt < max_retries - 1:
-            message_placeholder.markdown(
-                f"⚠️ กำลังเชื่อมต่อใหม่ครั้งที่ {attempt + 2}..."
-            )
-            time.sleep(1.5)
-          else:
-            bot_response = f"ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ: `{str(e)}`"
-            eval_data = {
-                "score_change": 0,
-                "new_level": current_rel_level,
-                "quest_update": None,
-            }
+          except Exception as e:
+            if attempt < max_retries - 1:
+              message_placeholder.markdown(
+                  f"⚠️ กำลังเชื่อมต่อใหม่ครั้งที่ {attempt + 2}..."
+              )
+              time.sleep(1.5)
+            else:
+              bot_response = (
+                  f"ขออภัยครับ เกิดข้อผิดพลาดในการเชื่อมต่อ: `{str(e)}`"
+              )
+              eval_data = {
+                  "score_change": 0,
+                  "new_level": current_rel_level,
+                  "quest_update": None,
+              }
+        message_placeholder.markdown(bot_response)
 
       if bot_response:
-        score_change = eval_data.get("score_change", 0)
+        score_change = eval_data.get("score_change", score_change)
         new_lvl = eval_data.get("new_level", current_rel_level)
-        completed_q_id = eval_data.get("quest_update", None)
+        completed_q_id = eval_data.get("quest_update", completed_q_id)
 
         quest_bonus = 0
         if completed_q_id:
@@ -1407,7 +1456,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         if photos and random.random() < 0.30:
           attached_photo_bytes = random.choice(photos)[0]
 
-        message_placeholder.markdown(bot_response)
         if attached_photo_bytes:
           st.image(Image.open(io.BytesIO(attached_photo_bytes)), width=280)
 
