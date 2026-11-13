@@ -45,29 +45,43 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบอัปเดตโครงสร้างอัตโนมัติ
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมรองรับฟิลด์ Persona ละเอียด
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # ตารางผู้ใช้งานระบบ
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password TEXT,
             is_admin INTEGER DEFAULT 0,
-            user_persona TEXT DEFAULT ''
+            user_name TEXT DEFAULT '',
+            user_persona TEXT DEFAULT '',
+            pronoun_speak TEXT DEFAULT '',
+            pronoun_desc TEXT DEFAULT '',
+            call_speak TEXT DEFAULT '',
+            call_desc TEXT DEFAULT ''
         )
     """)
 
+  # ตรวจสอบและเพิ่มคอลัมน์กรณีอัปเดตจากฐานข้อมูลเก่า
   cursor.execute("PRAGMA table_info(users)")
   columns = [col[1] for col in cursor.fetchall()]
   if "is_admin" not in columns:
     cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+  if "user_name" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''")
   if "user_persona" not in columns:
     cursor.execute("ALTER TABLE users ADD COLUMN user_persona TEXT DEFAULT ''")
+  if "pronoun_speak" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN pronoun_speak TEXT DEFAULT ''")
+  if "pronoun_desc" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN pronoun_desc TEXT DEFAULT ''")
+  if "call_speak" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN call_speak TEXT DEFAULT ''")
+  if "call_desc" not in columns:
+    cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
 
-  # ตัวละครหลัก (ส่วนกลาง ทุกคนเห็นเหมือนกัน)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -79,7 +93,6 @@ def init_db():
         )
     """)
 
-  # ตัวละครเสริม (ส่วนกลาง)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +105,6 @@ def init_db():
         )
     """)
 
-  # สถานะความสัมพันธ์ (แยกตาม username และ char_name)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_status (
             username TEXT,
@@ -103,7 +115,6 @@ def init_db():
         )
     """)
 
-  # ภารกิจส่วนกลาง
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,7 +124,6 @@ def init_db():
         )
     """)
 
-  # สถานะการทำภารกิจสำเร็จของแต่ละยูสเซอร์
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_quests (
             username TEXT,
@@ -123,7 +133,6 @@ def init_db():
         )
     """)
 
-  # คลังรูปภาพ (ส่วนกลาง)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,7 +141,6 @@ def init_db():
         )
     """)
 
-  # ประวัติแชท (แยกตาม username และ char_name)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,13 +240,20 @@ if not st.session_state.logged_in:
             )
 
             cursor.execute(
-                "INSERT INTO users (username, password, is_admin, user_persona)"
-                " VALUES (?, ?, ?, ?)",
+                """
+                    INSERT INTO users (username, password, is_admin, user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                 (
                     r_user,
                     hash_password(r_pass),
                     assigned_admin,
-                    f"นักเรียนใหม่บ้านสลิธีริน เพื่อนร่วมชั้นของเดรโก",
+                    r_user,
+                    "เป็นนักเรียนฮอกวอตส์รุ่นเดียวกับเดรโก",
+                    "ผม / ฉัน",
+                    "เธอ / เขา",
+                    "คุณ",
+                    "เขา",
                 ),
             )
             conn.commit()
@@ -265,14 +280,24 @@ is_current_admin = st.session_state.is_admin
 
 # ดึงข้อมูล Persona ของผู้ใช้ปัจจุบัน
 cursor.execute(
-    "SELECT user_persona FROM users WHERE username = ?", (current_user,)
-)
+    """
+    SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc 
+    FROM users WHERE username = ?
+""",
+    (current_user,),
+),
 p_row = cursor.fetchone()
-current_user_persona = (
-    p_row[0]
-    if p_row and p_row[0]
-    else "คุณคือผู้เล่นทั่วไปในโลกแฟนตาซีนี้"
-)
+if p_row:
+  u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row
+else:
+  u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = (
+      current_user,
+      "",
+      "",
+      "",
+      "",
+      "",
+  )
 
 # ดึงรายชื่อตัวละครส่วนกลางทั้งหมด
 cursor.execute("SELECT name FROM characters")
@@ -297,25 +322,51 @@ with st.sidebar:
 
   st.divider()
 
-  # 🎭 เมนูตั้งค่าบทบาทของตัวเอง (User Persona)
-  with st.expander("🎭 ตั้งค่าบทบาท/ตัวตนของคุณ"):
-    with st.form("user_persona_form"):
-      new_persona = st.text_area(
-          "บทบาทของคุณในการสวมบทบาท (Roleplay Persona):",
-          value=current_user_persona,
-          height=90,
-          placeholder="เช่น ชื่อ เมอร์ลิน เป็นเด็กปี 1 บ้านกริฟฟินดอร์...",
+  # 🎭 เมนูตั้งค่าบทบาทตัวตนของคุณ (User Persona ละเอียด)
+  with st.expander("⚙️ ตั้งค่าบทบาทตัวตนของคุณ"):
+    with st.form("user_persona_detailed_form"):
+      edit_uname = st.text_input("ชื่อของคุณ:", value=u_name)
+      edit_persona = st.text_area(
+          "บทบาทของคุณ (User Prompt / Lore):", value=u_persona, height=80
       )
-      save_persona = st.form_submit_button(
-          "💾 บันทึกบทบาท", use_container_width=True
+
+      st.markdown("---")
+      st.markdown("🔹 **สรรพนามตัวละครของคุณ**")
+      col_p1, col_p2 = st.columns(2)
+      with col_p1:
+        edit_pspeak = st.text_input("ตอนพูด (เช่น ผม/ฉัน):", value=u_pspeak)
+      with col_p2:
+        edit_pdesc = st.text_input("ตอนบรรยาย (เช่น เธอ/เขา):", value=u_pdesc)
+
+      st.markdown("🔹 **สรรพนามที่ตัวละครเรียกคุณ**")
+      col_c1, col_c2 = st.columns(2)
+      with col_c1:
+        edit_cspeak = st.text_input("ตอนพูดด้วย (เช่น คุณ/นาย):", value=u_cspeak)
+      with col_c2:
+        edit_cdesc = st.text_input("ตอนบรรยาย (เช่น เขา/ชายหนุ่ม):", value=u_cdesc)
+
+      save_persona_btn = st.form_submit_button(
+          "💾 บันทึกการตั้งค่าบทบาท", use_container_width=True
       )
-      if save_persona:
+      if save_persona_btn:
         cursor.execute(
-            "UPDATE users SET user_persona = ? WHERE username = ?",
-            (new_persona, current_user),
+            """
+                UPDATE users 
+                SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
+                WHERE username = ?
+            """,
+            (
+                edit_uname,
+                edit_persona,
+                edit_pspeak,
+                edit_pdesc,
+                edit_cspeak,
+                edit_cdesc,
+                current_user,
+            ),
         )
         conn.commit()
-        st.success("บันทึกบทบาทของคุณสำเร็จ!")
+        st.success("บันทึกบทบาทเรียบร้อยแล้ว!")
         st.rerun()
 
   if st.button("🚪 ออกจากระบบ", use_container_width=True):
@@ -1101,8 +1152,11 @@ if st.session_state.in_chat and st.session_state.current_char:
   full_system_prompt = f"""
     {base_prompt}
 
-    [ข้อมูลผู้สนทนา / บทบาทของคุณ (User Persona)]:
-    {current_user_persona}
+    [ข้อมูลผู้ใช้ / ตัวตนของคุณ (User Persona)]:
+    - ชื่อของคุณ: {u_name}
+    - บทบาท/ประวัติของคุณ: {u_persona}
+    - สรรพนามที่คุณใช้แทนตัวเอง: ตอนพูด "{u_pspeak}", ตอนบรรยาย "{u_pdesc}"
+    - สรรพนามที่ตัวละครเรียกคุณ: ตอนพูดด้วย "{u_cspeak}", ตอนบรรยาย "{u_cdesc}"
 
     [บุคลิกและนิสัยของตัวละครหลัก]:
     {char_personality}
@@ -1113,7 +1167,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     [ตัวละครเสริมรอบตัว]:
     {supporting_text}
 
-    [สถานะความสัมพันธ์ปัจจุบันกับผู้ใช้ ({current_user})]: ระดับ "{current_rel_level}" (คะแนนความชอบ: {current_affection}/100)
+    [สถานะความสัมพันธ์ปัจจุบันกับผู้ใช้ ({u_name})]: ระดับ "{current_rel_level}" (คะแนนความชอบ: {current_affection}/100)
     
     *กฎการประเมินคะแนนความชอบ (score_change)*:
     - ถ้าผู้ใช้คุยดี เป็นมิตร ทำตามภารกิจ หรือพูดจาถูกใจ: ให้คะแนนบวกเพิ่ม (2 ถึง 10)
@@ -1189,8 +1243,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
   with col_title:
     st.markdown(
-        f"### แชทกับ: `{st.session_state.current_char}` (ผู้ใช้:"
-        f" `{current_user}`)"
+        f"### แชทกับ: `{st.session_state.current_char}` (ผู้ใช้: `{u_name}`)"
     )
   with col_reset:
     if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
