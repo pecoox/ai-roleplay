@@ -27,15 +27,17 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* กล่องแสดงสถานะความชอบแบบติดด้านล่าง */
-    .affection-box-bottom {
-        background: linear-gradient(135deg, rgba(255,105,180,0.15), rgba(138,43,226,0.15));
+    /* หลอดสถานะความชอบขนาดเล็กบนหัวแชท AI */
+    .affection-badge {
+        display: inline-block;
+        background: linear-gradient(135deg, rgba(255,105,180,0.2), rgba(138,43,226,0.2));
         border: 1px solid rgba(255,105,180,0.4);
-        border-radius: 10px;
-        padding: 8px 14px;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 12px;
         margin-bottom: 8px;
-        font-size: 14px;
-        text-align: center;
+        color: #ff99cc;
+        font-weight: bold;
     }
     </style>
 """,
@@ -878,16 +880,24 @@ if st.session_state.in_chat and st.session_state.current_char:
         {"role": row[0], "content": row[1], "image": img_obj}
     )
 
-  col_av, col_title, col_reset = st.columns([1, 5, 2])
+  # 🖥️ หัวข้อห้องแชท พร้อมปุ่มรีเซ็ตและปุ่มกดดูภารกิจ
+  col_av, col_title, col_quest_btn, col_reset = st.columns([1, 4, 1.5, 1.5])
   with col_av:
     if char_avatar_img:
       st.image(char_avatar_img, width=60)
     else:
       st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
   with col_title:
-    st.markdown(f"### ห้องแชทส่วนตัวกับ: `{st.session_state.current_char}`")
+    st.markdown(f"### แชทกับ: `{st.session_state.current_char}`")
+  with col_quest_btn:
+    # 🎯 ปุ่มกดเปิด/ปิดดูภารกิจ
+    if "show_quests" not in st.session_state:
+      st.session_state.show_quests = False
+    if st.button("🎯 ดูภารกิจ", use_container_width=True):
+      st.session_state.show_quests = not st.session_state.show_quests
+      st.rerun()
   with col_reset:
-    if st.button("🔄 รีเซ็ตแชทใหม่", use_container_width=True):
+    if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
       cursor.execute(
           "DELETE FROM messages WHERE char_name = ?",
           (st.session_state.current_char,),
@@ -913,31 +923,40 @@ if st.session_state.in_chat and st.session_state.current_char:
           ),
       )
       conn.commit()
-      st.success("รีเซ็ตบทสนทนาและสุ่มข้อความทักทายใหม่สำเร็จ!")
+      st.success("รีเซ็ตบทสนทนาสำเร็จ!")
       st.rerun()
 
-  with st.expander("🎯 เปิดดูภารกิจทั้งหมด (Quest Log)", expanded=False):
-    cursor.execute(
-        "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
-        (st.session_state.current_char,),
-    )
-    quests = cursor.fetchall()
-    if quests:
-      for q_id, desc, completed, pts in quests:
-        if completed:
-          st.markdown(
-              f"- ✅ **[ภารกิจที่ {q_id}]** ~~{desc}~~ — *สำเร็จแล้ว (+{pts} แต้ม)*"
-          )
-        else:
-          st.markdown(
-              f"- ⏳ **[ภารกิจที่ {q_id}]** {desc} — *ยังไม่สำเร็จ (รางวัล: {pts}"
-              " แต้ม)*"
-          )
-    else:
-      st.caption("ยังไม่มีภารกิจ สามารถเพิ่มได้ที่เมนูด้านซ้ายครับ")
+  # แสดงตารางภารกิจถ้าผู้ใช้กดปุ่มดูภารกิจ
+  if st.session_state.show_quests:
+    with st.container(border=True):
+      st.markdown("#### 🎯 ภารกิจทั้งหมด (Quest Log)")
+      cursor.execute(
+          "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
+          (st.session_state.current_char,),
+      )
+      quests = cursor.fetchall()
+      if quests:
+        for q_id, desc, completed, pts in quests:
+          if completed:
+            st.markdown(
+                f"- ✅ **[ภารกิจที่ {q_id}]** ~~{desc}~~ — *สำเร็จแล้ว (+{pts} แต้ม)*"
+            )
+          else:
+            st.markdown(
+                f"- ⏳ **[ภารกิจที่ {q_id}]** {desc} — *ยังไม่สำเร็จ (รางวัล: {pts}"
+                " แต้ม)*"
+            )
+      else:
+        st.caption(
+            "ยังไม่มีภารกิจ สามารถเพิ่มได้ที่เมนู '🎯 จัดการภารกิจ' ด้านซ้ายครับ"
+        )
+      if st.button("❌ ปิดหน้าต่างภารกิจ"):
+        st.session_state.show_quests = False
+        st.rerun()
 
   st.divider()
 
+  # แสดงประวัติแชท พร้อมหลอดความชอบดวงน้อยบนหัวข้อความ AI
   for message in current_messages:
     if message["role"] == "user":
       with st.chat_message("user", avatar="👤"):
@@ -945,20 +964,14 @@ if st.session_state.in_chat and st.session_state.current_char:
     else:
       avatar_icon = char_avatar_img if char_avatar_img else "✨"
       with st.chat_message("assistant", avatar=avatar_icon):
+        # 💖 แสดงหลอดสถานะความชอบแบบเล็กๆ ไว้บนหัวข้อความ AI ทุกข้อความ
+        st.markdown(
+            f'<div class="affection-badge">💖 {current_rel_level} | คะแนน: {current_affection}/100</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown(message["content"])
         if message["image"]:
           st.image(message["image"], width=280)
-
-  # 💖 ย้ายกล่องสถานะความชอบมาไว้ติดกับช่องพิมพ์ข้อความด้านล่างสุด
-  st.markdown(
-      f"""
-      <div class="affection-box-bottom">
-          <b>💖 สถานะความสัมพันธ์:</b> <span style="color: #ff4b4b; font-weight: bold;">{current_rel_level}</span> 
-          &nbsp;|&nbsp; <b>คะแนนความชอบ:</b> <code>{current_affection} / 100</code>
-      </div>
-  """,
-      unsafe_allow_html=True,
-  )
 
   if user_input := st.chat_input(
       f"ส่งข้อความหา {st.session_state.current_char}..."
