@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม
+# 🎨 ดีไซน์ CSS พรีเมียม (ปรับขนาดการ์ดและรูปภาพให้เท่ากันและพอดีตา)
 st.markdown(
     """
     <style>
@@ -38,6 +38,14 @@ st.markdown(
         font-size: 12px;
         color: #ff99cc;
         font-weight: bold;
+    }
+
+    /* 🖼️ ควบคุมขนาดรูปภาพการ์ดตัวละครในหน้าแรกให้เท่ากันเป๊ะ */
+    div[data-testid="stImage"] img {
+        height: 220px !important;
+        object-fit: cover !important;
+        border-radius: 12px !important;
+        width: 100% !important;
     }
     </style>
 """,
@@ -992,7 +1000,7 @@ with st.sidebar:
 
 
 # ==========================================
-# 🏠 หน้าแรก
+# 🏠 หน้าแรก (ปรับขนาดการแสดงผลการ์ดตัวละครให้พอดีตาและเท่ากัน)
 # ==========================================
 if not st.session_state.in_chat:
   if is_current_admin and sidebar_action == "👥 จัดการผู้ใช้งานระบบ":
@@ -1072,13 +1080,14 @@ if not st.session_state.in_chat:
   if not all_chars:
     st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
   else:
-    cols = st.columns(3)
+    # แบ่งคอลัมน์แสดงผล (เพิ่มจำนวนคอลัมน์เพื่อให้การ์ดมีขนาดพอดี ไม่ใหญ่เกินไป)
+    cols = st.columns(4)
     for idx, c_name in enumerate(all_chars):
       cursor.execute(
           "SELECT personality, avatar FROM characters WHERE name = ?", (c_name,)
       )
       c_data = cursor.fetchone()
-      with cols[idx % 3]:
+      with cols[idx % 4]:
         with st.container(border=True):
           if c_data and c_data[1]:
             st.image(Image.open(io.BytesIO(c_data[1])), use_container_width=True)
@@ -1089,7 +1098,7 @@ if not st.session_state.in_chat:
             )
           st.markdown(f"### 🌟 {c_name}")
           if st.button(
-              f"✨ เริ่มแชทกับ {c_name}",
+              f"✨ เริ่มแชท",
               key=f"b_{c_name}",
               use_container_width=True,
           ):
