@@ -183,22 +183,23 @@ def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
 
-# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์ตามแต้มสะสม
+# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์ เปลี่ยนทุกๆ 100 คะแนนเป๊ะๆ
 def get_relationship_level(score):
-  if score < 50:
-    return "คนแปลกหน้า"
-  elif score < 150:
-    return "คนรู้จัก"
-  elif score < 300:
-    return "เพื่อนใหม่"
-  elif score < 500:
-    return "เพื่อนสนิท"
-  elif score < 800:
-    return "คนรู้ใจ"
-  elif score < 1200:
-    return "คู่แท้ / คนสำคัญ"
-  else:
-    return "ตำนานแห่งความผูกพัน 💖"
+  levels = [
+      (0, "คนแปลกหน้า"),
+      (100, "คนรู้จัก"),
+      (200, "เพื่อนใหม่"),
+      (300, "เพื่อนสนิท"),
+      (400, "คนรู้ใจ"),
+      (500, "คู่ชีวิต / คนสำคัญ"),
+      (600, "พาร์ทเนอร์รู้ใจ"),
+      (700, "โซลเมท"),
+      (800, "ความผูกพันลึกซึ้ง"),
+      (900, "รักแท้ไร้ขีดจำกัด"),
+  ]
+  # หารด้วย 100 เพื่อเทียบช่วงเลเวล (เช่น 0-99 เลเวล 0, 100-199 เลเวล 1)
+  idx = min(score // 100, len(levels) - 1)
+  return levels[idx][1]
 
 
 if "logged_in" not in st.session_state:
@@ -1327,7 +1328,7 @@ if st.session_state.in_chat and st.session_state.current_char:
             " คะแนนเรียบร้อย)*"
         )
       except Exception:
-        bot_response = "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ชอบ 50`)*"
+        bot_response = "*(รูปแบบคำสั่งไม่ถูกต้อง ใช้ตัวอย่าง: `/+ชอบ 100`)*"
     elif user_input.startswith("/+ผ่านภารกิจ "):
       is_cheat = True
       try:
