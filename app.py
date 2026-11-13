@@ -443,7 +443,7 @@ with st.sidebar:
   else:
     sidebar_action = "เลือกตัวละคร"
 
-  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ผูกให้ตรงกันเรียบร้อย)
+  # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ (ผูกให้ตรงกันแบบไดนามิก)
   if all_chars:
     st.divider()
     selected_char = st.selectbox(
@@ -463,6 +463,7 @@ with st.sidebar:
       st.session_state.current_char = selected_char
 
   st.divider()
+  active_char = st.session_state.current_char
 
   # 1. สร้างตัวละครหลักใหม่ (Admin Only)
   if is_current_admin and sidebar_action == "➕ สร้างตัวละครหลักใหม่":
@@ -512,11 +513,11 @@ with st.sidebar:
   elif (
       is_current_admin
       and sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก"
-      and st.session_state.current_char
+      and active_char
   ):
     cursor.execute(
         "SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?",
-        (st.session_state.current_char,),
+        (active_char,),
     )
     curr_data = cursor.fetchone()
     if curr_data:
@@ -526,7 +527,7 @@ with st.sidebar:
       except Exception:
         old_msgs = [c_fmsg_json]
 
-      with st.form("edit_char_form"):
+      with st.form(f"edit_char_form_{active_char}"):
         edit_prompt = st.text_area(
             "คาแรคเตอร์หลัก:", value=c_prompt, height=60
         )
@@ -542,7 +543,9 @@ with st.sidebar:
             "ข้อความ 3:", value=old_msgs[2] if len(old_msgs) > 2 else "", height=70
         )
         edit_avatar = st.file_uploader(
-            "เปลี่ยนรูปโปรไฟล์", type=["png", "jpg", "jpeg", "webp"]
+            "เปลี่ยนรูปโปรไฟล์",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"edit_av_{active_char}",
         )
 
         if st.form_submit_button("💾 บันทึกการแก้ไข", use_container_width=True):
@@ -563,7 +566,7 @@ with st.sidebar:
                   edit_lore,
                   new_combined_msgs,
                   new_avatar_bytes,
-                  st.session_state.current_char,
+                  active_char,
               ),
           )
           conn.commit()
@@ -574,19 +577,19 @@ with st.sidebar:
   elif (
       is_current_admin
       and sidebar_action == "👥 จัดการตัวละครเสริม"
-      and st.session_state.current_char
+      and active_char
   ):
-    st.markdown(f"### 👥 ตัวละครเสริม: {st.session_state.current_char}")
-    sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม"])
+    st.markdown(f"### 👥 ตัวละครเสริม: {active_char}")
+    sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม"], key=f"sub_radio_{active_char}")
 
     if sub_action == "➕ เพิ่มตัวละครเสริม":
-      with st.form("add_sub_char_form", clear_on_submit=True):
+      with st.form(f"add_sub_char_form_{active_char}", clear_on_submit=True):
         sub_name = st.text_input("ชื่อตัวละครเสริม:")
         sub_prompt = st.text_area("คาแรคเตอร์ตัวละครเสริม:", height=60)
         sub_personality = st.text_area("🧠 บุคลิกตัวละครเสริม:", height=60)
         sub_lore = st.text_area("📖 เรื่องราวพื้นหลัง:", height=60)
         sub_avatar = st.file_uploader(
-            "รูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"]
+            "รูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"], key=f"sub_av_{active_char}"
         )
 
         if (
@@ -604,7 +607,7 @@ with st.sidebar:
                 VALUES (?, ?, ?, ?, ?, ?)
             """,
               (
-                  st.session_state.current_char,
+                  active_char,
                   sub_name,
                   sub_prompt,
                   sub_personality,
@@ -618,13 +621,13 @@ with st.sidebar:
     else:
       cursor.execute(
           "SELECT id, sub_name FROM supporting_characters WHERE char_name = ?",
-          (st.session_state.current_char,),
+          (active_char,),
       )
       sub_list = cursor.fetchall()
       if sub_list:
         sub_dict = {s[1]: s[0] for s in sub_list}
         selected_sub_name = st.selectbox(
-            "เลือกตัวละครเสริม:", list(sub_dict.keys())
+            "เลือกตัวละครเสริม:", list(sub_dict.keys()), key=f"sel_sub_{active_char}"
         )
         selected_sub_id = sub_dict[selected_sub_name]
 
@@ -641,7 +644,7 @@ with st.sidebar:
             e_sub_pers = st.text_area("บุคลิก:", value=sp_pers, height=60)
             e_sub_lore = st.text_area("เรื่องราวพื้นหลัง:", value=sp_lore, height=60)
             e_sub_av = st.file_uploader(
-                "เปลี่ยนรูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"]
+                "เปลี่ยนรูปตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"], key=f"edit_sub_av_{selected_sub_id}"
             )
 
             col_sub_e1, col_sub_e2 = st.columns(2)
@@ -692,16 +695,16 @@ with st.sidebar:
   elif (
       is_current_admin
       and sidebar_action == "🎯 จัดการภารกิจ (Quest Log)"
-      and st.session_state.current_char
+      and active_char
   ):
-    st.markdown(f"### 🎯 จัดการภารกิจ: {st.session_state.current_char}")
-    with st.form("add_quest_form_sidebar", clear_on_submit=True):
+    st.markdown(f"### 🎯 จัดการภารกิจ: {active_char}")
+    with st.form(f"add_quest_form_{active_char}", clear_on_submit=True):
       new_quest_desc = st.text_input("รายละเอียดภารกิจใหม่:")
-      new_quest_pts = st.slider("คะแนนรางวัล:", 5, 50, 15)
+      new_quest_pts = st.slider("คะแนนรางวัล:", 5, 50, 15, key=f"q_pts_{active_char}")
       if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and new_quest_desc:
         cursor.execute(
             "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-            (st.session_state.current_char, new_quest_desc, new_quest_pts),
+            (active_char, new_quest_desc, new_quest_pts),
         )
         conn.commit()
         st.success("เพิ่มภารกิจสำเร็จ!")
@@ -710,7 +713,7 @@ with st.sidebar:
     st.markdown("---")
     cursor.execute(
         "SELECT id, task_desc FROM quests WHERE char_name = ?",
-        (st.session_state.current_char,),
+        (active_char,),
     )
     q_list = cursor.fetchall()
     if q_list:
@@ -719,7 +722,7 @@ with st.sidebar:
         with q_col1:
           st.markdown(f"- **[#{q_id}]** {q_desc}")
         with q_col2:
-          if st.button("🗑️", key=f"del_q_{q_id}"):
+          if st.button("🗑️", key=f"del_q_{active_char}_{q_id}"):
             cursor.execute("DELETE FROM quests WHERE id = ?", (q_id,))
             conn.commit()
             st.rerun()
@@ -730,31 +733,32 @@ with st.sidebar:
   elif (
       is_current_admin
       and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
-      and st.session_state.current_char
+      and active_char
   ):
-    st.markdown(f"### 🖼️ คลังรูป: {st.session_state.current_char}")
+    st.markdown(f"### 🖼️ คลังรูป: {active_char}")
     uploaded_gallery_photos = st.file_uploader(
         "อัปโหลดรูปภาพเข้าคลัง",
         type=["png", "jpg", "jpeg", "webp"],
         accept_multiple_files=True,
+        key=f"gallery_upload_{active_char}",
     )
 
     if uploaded_gallery_photos:
       cursor.execute(
           "SELECT COUNT(*) FROM character_photos WHERE char_name = ?",
-          (st.session_state.current_char,),
+          (active_char,),
       )
       current_db_count = cursor.fetchone()[0]
 
       if len(uploaded_gallery_photos) != current_db_count:
         cursor.execute(
             "DELETE FROM character_photos WHERE char_name = ?",
-            (st.session_state.current_char,),
+            (active_char,),
         )
         for photo in uploaded_gallery_photos:
           cursor.execute(
               "INSERT INTO character_photos (char_name, photo) VALUES (?, ?)",
-              (st.session_state.current_char, photo.getvalue()),
+              (active_char, photo.getvalue()),
           )
         conn.commit()
         st.success("อัปเดตคลังรูปภาพสำเร็จ!")
@@ -763,7 +767,7 @@ with st.sidebar:
     st.markdown("---")
     cursor.execute(
         "SELECT id, photo FROM character_photos WHERE char_name = ?",
-        (st.session_state.current_char,),
+        (active_char,),
     )
     photos_in_db = cursor.fetchall()
     if photos_in_db:
@@ -772,7 +776,7 @@ with st.sidebar:
         with p_cols[idx % 3]:
           img_item = Image.open(io.BytesIO(p_blob))
           st.image(img_item, use_container_width=True)
-          if st.button(f"🗑️ ลบ #{p_id}", key=f"del_photo_{p_id}"):
+          if st.button(f"🗑️ ลบ #{p_id}", key=f"del_photo_{active_char}_{p_id}"):
             cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
             conn.commit()
             st.rerun()
