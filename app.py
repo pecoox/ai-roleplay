@@ -64,7 +64,6 @@ def init_db():
         )
     """)
 
-  # ตรวจสอบและเพิ่มคอลัมน์กรณีอัปเดตจากฐานข้อมูลเก่า
   cursor.execute("PRAGMA table_info(users)")
   columns = [col[1] for col in cursor.fetchall()]
   if "is_admin" not in columns:
@@ -285,7 +284,7 @@ cursor.execute(
     FROM users WHERE username = ?
 """,
     (current_user,),
-),
+)
 p_row = cursor.fetchone()
 if p_row:
   u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row
@@ -381,11 +380,6 @@ with st.sidebar:
     st.session_state.in_chat = False
     st.session_state.current_char = None
     st.rerun()
-
-  st.divider()
-  chat_mode = st.radio(
-      "เลือกสไตล์การคุย:", ["💬 แชทสั้นๆ เป็นธรรมชาติ", "📖 โหมดนิยายบรรยายยาว"]
-  )
 
   st.divider()
 
@@ -848,16 +842,16 @@ with st.sidebar:
     users_list = cursor.fetchall()
 
     if users_list:
-      for u_name, u_admin in users_list:
+      for u_name_db, u_admin in users_list:
         with st.container(border=True):
           role_label = "🛡️ Admin" if u_admin == 1 else "👤 User"
-          st.markdown(f"**ยูสเซอร์:** `{u_name}` ({role_label})")
+          st.markdown(f"**ยูสเซอร์:** `{u_name_db}` ({role_label})")
 
-          with st.form(f"manage_user_{u_name}"):
+          with st.form(f"manage_user_{u_name_db}"):
             new_p = st.text_input(
                 "เปลี่ยนรหัสผ่านใหม่ (ถ้าต้องการ):",
                 type="password",
-                key=f"np_{u_name}",
+                key=f"np_{u_name_db}",
             )
             col_u1, col_u2 = st.columns(2)
             with col_u1:
@@ -873,32 +867,36 @@ with st.sidebar:
               if new_p:
                 cursor.execute(
                     "UPDATE users SET password = ? WHERE username = ?",
-                    (hash_password(new_p), u_name),
+                    (hash_password(new_p), u_name_db),
                 )
                 conn.commit()
-                st.success(f"เปลี่ยนรหัสผ่านของ '{u_name}' สำเร็จ!")
+                st.success(f"เปลี่ยนรหัสผ่านของ '{u_name_db}' สำเร็จ!")
                 st.rerun()
               else:
                 st.warning("กรุณากรอกรหัสผ่านใหม่")
 
             if btn_del_u:
-              if u_name.lower() == "admin" and current_user.lower() == u_name:
+              if (
+                  u_name_db.lower() == "admin"
+                  and current_user.lower() == u_name_db
+              ):
                 st.error("ไม่สามารถลบบัญชี Admin หลักของตัวเองได้")
               else:
                 cursor.execute(
-                    "DELETE FROM users WHERE username = ?", (u_name,)
+                    "DELETE FROM users WHERE username = ?", (u_name_db,)
                 )
                 cursor.execute(
-                    "DELETE FROM messages WHERE username = ?", (u_name,)
+                    "DELETE FROM messages WHERE username = ?", (u_name_db,)
                 )
                 cursor.execute(
-                    "DELETE FROM character_status WHERE username = ?", (u_name,)
+                    "DELETE FROM character_status WHERE username = ?",
+                    (u_name_db,),
                 )
                 cursor.execute(
-                    "DELETE FROM user_quests WHERE username = ?", (u_name,)
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
                 )
                 conn.commit()
-                st.success(f"ลบบัญชี '{u_name}' สำเร็จ!")
+                st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
                 st.rerun()
     else:
       st.info("ยังไม่มีผู้ใช้งานอื่นในระบบ")
@@ -924,18 +922,18 @@ if not st.session_state.in_chat:
     all_users = cursor.fetchall()
 
     if all_users:
-      for u_name, u_admin in all_users:
+      for u_name_db, u_admin in all_users:
         with st.container(border=True):
           role_label = (
               "🛡️ ผู้ดูแลระบบ (Admin)"
               if u_admin == 1
               else "👤 ผู้ใช้งานทั่วไป (User)"
           )
-          st.markdown(f"### ชื่อผู้ใช้: `{u_name}` — *({role_label})*")
+          st.markdown(f"### ชื่อผู้ใช้: `{u_name_db}` — *({role_label})*")
 
-          with st.form(f"main_manage_user_{u_name}"):
+          with st.form(f"main_manage_user_{u_name_db}"):
             m_new_pass = st.text_input(
-                "ตั้งรหัสผ่านใหม่:", type="password", key=f"mp_{u_name}"
+                "ตั้งรหัสผ่านใหม่:", type="password", key=f"mp_{u_name_db}"
             )
             col_m1, col_m2 = st.columns(2)
             with col_m1:
@@ -951,32 +949,33 @@ if not st.session_state.in_chat:
               if m_new_pass:
                 cursor.execute(
                     "UPDATE users SET password = ? WHERE username = ?",
-                    (hash_password(m_new_pass), u_name),
+                    (hash_password(m_new_pass), u_name_db),
                 )
                 conn.commit()
-                st.success(f"อัปเดตรหัสผ่านของ '{u_name}' สำเร็จ!")
+                st.success(f"อัปเดตรหัสผ่านของ '{u_name_db}' สำเร็จ!")
                 st.rerun()
               else:
                 st.warning("กรุณากรอกรหัสผ่านใหม่")
 
             if m_del:
-              if u_name.lower() == "admin":
+              if u_name_db.lower() == "admin":
                 st.error("ไม่อนุญาตให้ลบบัญชี Admin หลัก")
               else:
                 cursor.execute(
-                    "DELETE FROM users WHERE username = ?", (u_name,)
+                    "DELETE FROM users WHERE username = ?", (u_name_db,)
                 )
                 cursor.execute(
-                    "DELETE FROM messages WHERE username = ?", (u_name,)
+                    "DELETE FROM messages WHERE username = ?", (u_name_db,)
                 )
                 cursor.execute(
-                    "DELETE FROM character_status WHERE username = ?", (u_name,)
+                    "DELETE FROM character_status WHERE username = ?",
+                    (u_name_db,),
                 )
                 cursor.execute(
-                    "DELETE FROM user_quests WHERE username = ?", (u_name,)
+                    "DELETE FROM user_quests WHERE username = ?", (u_name_db,)
                 )
                 conn.commit()
-                st.success(f"ลบบัญชี '{u_name}' สำเร็จ!")
+                st.success(f"ลบบัญชี '{u_name_db}' สำเร็จ!")
                 st.rerun()
     else:
       st.info("ยังไม่มีผู้ใช้งานในระบบ")
@@ -1098,7 +1097,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ส่วนห้องแชท (Chat Room) - แยกตามยูสเซอร์
+# 💬 ส่วนห้องแชท (Chat Room) - โหมดนิยายบรรยายยาวถาวร
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -1176,25 +1175,16 @@ if st.session_state.in_chat and st.session_state.current_char:
     - คะแนนรวมสามารถลดต่ำกว่า 0 ได้ (สูงสุดไม่เกิน 100)
     """
 
-  if "นิยาย" in chat_mode:
-    roleplay_instruction = (
-        f"{full_system_prompt}\n\n[กฎการตอบ]:\n"
-        "1. เขียนตอบสไตล์นิยายบรรยาย มีท่าทาง สีหน้า ความรู้สึก (ใช้เครื่องหมาย *"
-        " ครอบการกระทำ)\n"
-        "2. สวมบทบาท 100% ตามระดับความสัมพันธ์ปัจจุบัน ห้ามหลุดคาแรคเตอร์\n"
-        "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-        '{"score_change": [ตัวเลขคะแนนที่เปลี่ยนแปลง เช่น บวก 5 หรือลบ 3 หรือลบ 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
-    )
-    temp_val = 1.1
-  else:
-    roleplay_instruction = (
-        f"{full_system_prompt}\n\n[กฎการตอบ]:\n"
-        "1. พูดจาภาษาคนธรรมดา เป็นธรรมชาติเหมือนแชทไลน์/ไอจี ตามระดับความสัมพันธ์ปัจจุบัน\n"
-        "2. สวมบทบาท 100% ห้ามหลุดคาแรคเตอร์\n"
-        "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
-        '{"score_change": [ตัวเลขคะแนนที่เปลี่ยนแปลง เช่น บวก 5 หรือลบ 3 หรือลบ 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
-    )
-    temp_val = 0.9
+  # บังคับใช้โหมดนิยายบรรยายยาวถาวร
+  roleplay_instruction = (
+      f"{full_system_prompt}\n\n[กฎการตอบ]:\n"
+      "1. เขียนตอบสไตล์นิยายบรรยาย มีท่าทาง สีหน้า ความรู้สึก (ใช้เครื่องหมาย *"
+      " ครอบการกระทำ)\n"
+      "2. สวมบทบาท 100% ตามระดับความสัมพันธ์ปัจจุบัน ห้ามหลุดคาแรคเตอร์\n"
+      "3. ในตอนท้ายของการตอบทุกครั้ง ให้แนบข้อมูลประเมินผลเป็น JSON บรรทัดสุดท้ายในรูปแบบนี้เป๊ะๆ:\n"
+      '{"score_change": [ตัวเลขคะแนนที่เปลี่ยนแปลง เช่น บวก 5 หรือลบ 3 หรือลบ 10], "new_level": "[ระดับความสัมพันธ์ล่าสุด]", "quest_update": [หมายเลขไอดีภารกิจที่ทำสำเร็จ หรือ null]}'
+  )
+  temp_val = 1.1
 
 
   def get_random_first_msg(raw_json, char_name):
