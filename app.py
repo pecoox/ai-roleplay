@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียม (ปรับสีส่วนบรรยาย *...* ให้จางลงและเป็นตัวเอียงเพื่อให้อ่านง่าย)
+# 🎨 ดีไซน์ CSS พรีเมียม
 st.markdown(
     """
     <style>
@@ -465,6 +465,7 @@ with st.sidebar:
         "เลือกการจัดการ:",
         [
             "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+            "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
             "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
             "👥 จัดการตัวละครเสริม",
@@ -477,7 +478,10 @@ with st.sidebar:
     sidebar_action = "เลือกตัวละคร"
 
   # 📌 เลือกตัวละครหลักสำหรับเมนูจัดการ
-  if all_chars and sidebar_action != "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)":
+  if all_chars and sidebar_action not in [
+      "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+      "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
+  ]:
     st.divider()
     selected_char = st.selectbox(
         "เลือกตัวละครหลัก:",
@@ -597,6 +601,114 @@ with st.sidebar:
               st.rerun()
             else:
               st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI กรุณาลองใหม่อีกครั้ง")
+          except Exception as e:
+            st.error(f"เกิดข้อผิดพลาด: {e}")
+
+  # 🌐 ฟีเจอร์ใหม่: ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI
+  elif is_current_admin and sidebar_action == "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI":
+    st.markdown("### 🌐 ดึงข้อมูลตัวละครจากเว็บไซต์")
+    st.caption(
+        "วางลิงก์เว็บไซต์ (เช่น Wikipedia, Fandom, แหล่งข้อมูลประวัติ) แล้วให้ AI ดึงข้อมูลมาสร้างตัวละครให้อัตโนมัติ!"
+    )
+
+    with st.form("web_scrape_char_form"):
+      web_url = st.text_input(
+          "ลิงก์เว็บไซต์ (URL):",
+          placeholder="https://en.wikipedia.org/wiki/...",
+      )
+      web_submit_btn = st.form_submit_button(
+          "🚀 ดึงข้อมูลและสร้างตัวละคร", use_container_width=True
+      )
+
+      if web_submit_btn and web_url:
+        with st.spinner(
+            f"กำลังดึงข้อมูลและให้ AI วิเคราะห์เนื้อหาจาก {web_url}..."
+        ):
+          try:
+            # ใช้ Google Search tool เพื่อช่วยค้นหาและดึงเนื้อหาจาก URL ที่ผู้ใช้ระบุ
+            search_prompt = f"โปรดดึงข้อมูล สรุปประวัติ คาแรคเตอร์ นิสัย และความสัมพันธ์จากเว็บไซต์นี้: {web_url}"
+            # ทำการค้นหาข้อมูลเว็บผ่าน google_search เพื่อให้ AI ได้เนื้อหาล่าสุดมาประมวลผล
+            search_result = google_search(queries=[web_url, search_prompt])
+
+            prompt_gen = (
+                f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลจากเว็บให้เป็นข้อมูล Roleplay\n"
+                f"ข้อมูลดิบที่ค้นหาจากเว็บสำหรับลิงก์ {web_url}: {search_result}\n\n"
+                f"กรุณาสรุปและสร้างข้อมูลตัวละครในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+                "{\n"
+                '  "name": "ชื่อตัวละคร",\n'
+                '  "prompt": "คาแรคเตอร์หลักและบทบาทจากข้อมูลเว็บ",\n'
+                '  "personality": "บุคลิกและนิสัยใจคอ",\n'
+                '  "lore": "เรื่องราวพื้นหลัง",\n'
+                '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2"],\n'
+                '  "sub_name": "ชื่อตัวละครเสริมที่เกี่ยวข้อง 1 คน",\n'
+                '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
+                '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
+                '  "quest_desc": "ภารกิจเริ่มต้น"\n'
+                "}"
+            )
+            response = client.models.generate_content(
+                model=model_name, contents=prompt_gen
+            )
+            raw_res = response.text.strip()
+
+            if "{" in raw_res and "}" in raw_res:
+              json_text = raw_res[
+                  raw_res.find("{") : raw_res.rfind("}") + 1
+              ]
+              char_info = json.loads(json_text)
+
+              c_name = char_info.get("name", "ตัวละครจากเว็บ")
+              c_prompt = char_info.get("prompt", "คุณคือ...")
+              c_pers = char_info.get("personality", "น่าสนใจ...")
+              c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
+              f_msgs = char_info.get(
+                  "first_messages",
+                  [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
+              )
+              s_name = char_info.get("sub_name", "ผู้เกี่ยวข้อง")
+              s_prompt = char_info.get("sub_prompt", "คอยสนับสนุน")
+              s_pers = char_info.get("sub_personality", "เป็นมิตร")
+              q_desc = char_info.get("quest_desc", "ทำความรู้จักกันเบื้องต้น")
+
+              cursor.execute(
+                  "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                  (
+                      c_name,
+                      c_prompt,
+                      c_pers,
+                      c_lore,
+                      json.dumps(f_msgs, ensure_ascii=False),
+                      None,
+                  ),
+              )
+
+              cursor.execute(
+                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
+                  (
+                      c_name,
+                      s_name,
+                      s_prompt,
+                      s_pers,
+                      "บุคคลในเนื้อเรื่อง",
+                  ),
+              )
+
+              cursor.execute(
+                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                  (c_name, q_desc, 20),
+              )
+
+              conn.commit()
+              st.session_state.current_char = c_name
+              st.session_state.in_chat = True
+              st.success(
+                  f"🎉 ดึงข้อมูลและสร้างตัวละคร '{c_name}' จากเว็บไซต์สำเร็จเรียบร้อยแล้ว!"
+              )
+              st.rerun()
+            else:
+              st.error(
+                  "ไม่สามารถแปลงข้อมูลจากเว็บไซต์ได้ กรุณาลองใหม่อีกครั้งหรือตรวจสอบลิงก์"
+              )
           except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
 
@@ -1010,6 +1122,7 @@ with st.sidebar:
       not in [
           "➕ สร้างตัวละครหลักใหม่ (Manual)",
           "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+          "🌐 ดึงข้อมูลตัวละครจากเว็บไซต์ด้วย AI",
       ]
   ):
     st.info("ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
@@ -1168,7 +1281,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
   )
 
-  # ✍️ ปรับ System Prompt ให้เน้นการขึ้นบรรทัดใหม่ระหว่างการบรรยายและบทพูดให้อ่านง่ายยิ่งขึ้น
   roleplay_instruction = f"""
 คุณคือนักเขียนนิยายโรแมนติก/ดราม่าและผู้สวมบทบาทมืออาชีพ ตัวละครหลักชื่อ '{st.session_state.current_char}'
 - ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
