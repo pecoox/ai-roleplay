@@ -27,13 +27,15 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* กล่องแสดงสถานะความชอบ */
-    .affection-box {
-        background: linear-gradient(135deg, rgba(255,105,180,0.1), rgba(138,43,226,0.1));
-        border: 1px solid rgba(255,105,180,0.3);
-        border-radius: 12px;
-        padding: 12px 16px;
-        margin-bottom: 15px;
+    /* กล่องแสดงสถานะความชอบแบบติดด้านล่าง */
+    .affection-box-bottom {
+        background: linear-gradient(135deg, rgba(255,105,180,0.15), rgba(138,43,226,0.15));
+        border: 1px solid rgba(255,105,180,0.4);
+        border-radius: 10px;
+        padding: 8px 14px;
+        margin-bottom: 8px;
+        font-size: 14px;
+        text-align: center;
     }
     </style>
 """,
@@ -796,7 +798,6 @@ if st.session_state.in_chat and st.session_state.current_char:
     current_affection = status_row[0]
     current_rel_level = status_row[1]
 
-  # อัปเดตกฎการประเมินค่าความชอบใหม่ ให้ลดได้หากผู้ใช้คุยไม่ถูกใจหรือใช้คำหยาบคาย/ด่า
   full_system_prompt = f"""
     {base_prompt}
 
@@ -915,16 +916,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       st.success("รีเซ็ตบทสนทนาและสุ่มข้อความทักทายใหม่สำเร็จ!")
       st.rerun()
 
-  st.markdown(
-      f"""
-      <div class="affection-box">
-          <b>💖 สถานะความสัมพันธ์:</b> <span style="color: #ff4b4b; font-weight: bold;">{current_rel_level}</span> 
-          &nbsp;|&&nbsp; <b>คะแนนความชอบ:</b> <code>{current_affection} / 100</code>
-      </div>
-  """,
-      unsafe_allow_html=True,
-  )
-
   with st.expander("🎯 เปิดดูภารกิจทั้งหมด (Quest Log)", expanded=False):
     cursor.execute(
         "SELECT id, task_desc, is_completed, reward_points FROM quests WHERE char_name = ?",
@@ -957,6 +948,17 @@ if st.session_state.in_chat and st.session_state.current_char:
         st.markdown(message["content"])
         if message["image"]:
           st.image(message["image"], width=280)
+
+  # 💖 ย้ายกล่องสถานะความชอบมาไว้ติดกับช่องพิมพ์ข้อความด้านล่างสุด
+  st.markdown(
+      f"""
+      <div class="affection-box-bottom">
+          <b>💖 สถานะความสัมพันธ์:</b> <span style="color: #ff4b4b; font-weight: bold;">{current_rel_level}</span> 
+          &nbsp;|&nbsp; <b>คะแนนความชอบ:</b> <code>{current_affection} / 100</code>
+      </div>
+  """,
+      unsafe_allow_html=True,
+  )
 
   if user_input := st.chat_input(
       f"ส่งข้อความหา {st.session_state.current_char}..."
@@ -1040,7 +1042,6 @@ if st.session_state.in_chat and st.session_state.current_char:
                   (completed_q_id,),
               )
 
-          # คำนวณคะแนนใหม่ (รองรับทั้งบวกและลบ จำกัดช่วง 0 ถึง 100)
           updated_score = max(
               0, min(100, current_affection + score_change + quest_bonus)
           )
