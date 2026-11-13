@@ -316,12 +316,65 @@ with st.sidebar:
 
   st.divider()
 
+  # 🎭 เมนูตั้งค่าบทบาทตัวตนของคุณ พร้อมฟังก์ชันสุ่ม/สร้างด้วย AI
   with st.expander("⚙️ ตั้งค่าบทบาทตัวตนของคุณ"):
+    # ปุ่มให้ AI สร้างบทบาทให้เข้ากับตัวละครปัจจุบัน
+    if st.session_state.current_char:
+      if st.button("✨ ให้ AI สร้างบทบาทให้เข้ากับเรื่องนี้", use_container_width=True):
+        with st.spinner("AI กำลังสร้างบทบาทที่เหมาะสม..."):
+          try:
+            cursor.execute(
+                "SELECT prompt, personality, lore FROM characters WHERE name = ?",
+                (st.session_state.current_char,),
+            )
+            c_info = cursor.fetchone()
+            c_p, c_pers, c_l = c_info if c_info else ("", "", "")
+
+            ai_prompt = (
+                f"คุณคือผู้ช่วยสร้างบทบาทผู้เล่น (User Persona) สำหรับนำไปสวมบทบาท (Roleplay) ร่วมกับตัวละครหลักชื่อ '{st.session_state.current_char}'\n"
+                f"ข้อมูลตัวละครหลัก: {c_p} | นิสัย: {c_pers} | เรื่องราว: {c_l}\n\n"
+                f"กรุณาสร้างข้อมูลผู้เล่นในรูปแบบ JSON 1 บรรทัด (ห้ามมีข้อความอื่นปน) ดังนี้:\n"
+                '{"user_name": "ชื่อตัวละครผู้เล่น", "user_persona": "ประวัติหรือความสัมพันธ์กับตัวละครหลักสั้นๆ", "pronoun_speak": "สรรพนามพูด เช่น ผม/ฉัน", "pronoun_desc": "สรรพนามบรรยาย เช่น เขา/เธอ", "call_speak": "สรรพนามเรียกตัวละคร เช่น คุณ/เธอ", "call_desc": "สรรพนามเรียกตอนบรรยาย เช่น ชายหนุ่ม"}'
+            )
+            ai_res = client.models.generate_content(
+                model=model_name, contents=ai_prompt
+            )
+            res_text = ai_res.text.strip()
+            if "{" in res_text and "}" in res_text:
+              json_str = res_text[res_text.find("{") : res_text.rfind("}") + 1]
+              p_data = json.loads(json_str)
+              u_name = p_data.get("user_name", u_name)
+              u_persona = p_data.get("user_persona", u_persona)
+              u_pspeak = p_data.get("pronoun_speak", u_pspeak)
+              u_pdesc = p_data.get("pronoun_desc", u_pdesc)
+              u_cspeak = p_data.get("call_speak", u_cspeak)
+              u_cdesc = p_data.get("call_desc", u_cdesc)
+
+              cursor.execute(
+                  """
+                    UPDATE users 
+                    SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
+                    WHERE username = ?
+                """,
+                  (
+                      u_name,
+                      u_persona,
+                      u_pspeak,
+                      u_pdesc,
+                      u_cspeak,
+                      u_cdesc,
+                      current_user,
+                  ),
+              )
+              conn.commit()
+              st.success("AI สร้างบทบาทให้เรียบร้อยแล้ว!")
+              st.rerun()
+          except Exception as e:
+            st.error(f"เกิดข้อผิดพลาด: {e}")
+
     with st.form("user_persona_detailed_form"):
       edit_uname = st.text_input("ชื่อของคุณ:", value=u_name)
-      edit_persona = st.text_area(
-          "บทบาทของคุณ:", value=u_persona, height=80
-      )
+      edit_persona = st.text_area("บทบาทของคุณ:", value=u_persona, height=80)
 
       st.markdown("---")
       col_p1, col_p2 = st.columns(2)
