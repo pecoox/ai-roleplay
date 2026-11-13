@@ -9,7 +9,7 @@ import json
 import hashlib
 import urllib.request
 import urllib.error
-from bs4 import BeautifulSoup
+import re
 
 st.set_page_config(
     page_title="AI Roleplay - Universe & Character Hub",
@@ -628,9 +628,13 @@ with st.sidebar:
             f"กำลังดึงข้อมูลและให้ AI วิเคราะห์เนื้อหาจาก {web_url}..."
         ):
           try:
-            # ดึงเนื้อหา HTML จากเว็บ
             req = urllib.request.Request(
-                web_url, headers={"User-Agent": "Mozilla/5.0"}
+                web_url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                    )
+                },
             )
             html_content = ""
             try:
@@ -641,11 +645,21 @@ with st.sidebar:
                   "ไม่สามารถดึงข้อมูลดิบจากเว็บได้โดยตรง แต่ลิงก์คือ: " + web_url
               )
 
-            # ใช้ BeautifulSoup กวาดเอาเฉพาะข้อความตัวหนังสือ
-            soup = BeautifulSoup(html_content, "html.parser")
-            for script in soup(["script", "style"]):
-              script.decompose()
-            text_data = soup.get_text(separator=" ", strip=True)[:15000]
+            # ใช้ Regular Expression ในการล้างแท็ก HTML ออกทั้งหมด
+            clean_text = re.sub(
+                r"<script.*?>.*?</script>",
+                "",
+                html_content,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            clean_text = re.sub(
+                r"<style.*?>.*?</style>",
+                "",
+                clean_text,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+            clean_text = re.sub(r"<.*?>", " ", clean_text)
+            text_data = re.sub(r"\s+", " ", clean_text).strip()[:15000]
 
             prompt_gen = (
                 f"คุณคือผู้เชี่ยวชาญการแปลงข้อมูลเว็บให้เป็นตัวละคร Roleplay\n"
