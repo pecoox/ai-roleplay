@@ -31,12 +31,12 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบตรวจสอบและเพิ่มคอลัมน์อัตโนมัติ
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite ตรวจสอบและสร้างตารางรวมถึงอัปเดตคอลัมน์อัตโนมัติ
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
 
-  # สร้างตารางหลักถ้ายังไม่มี
+  # 1. ตารางตัวละคร
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -45,14 +45,13 @@ def init_db():
             avatar BLOB
         )
     """)
-
-  # ตรวจสอบว่ามีคอลัมน์ lore หรือยัง (ป้องกัน Error กรณีฐานข้อมูลเก่า)
+  # อัปเดตคอลัมน์ lore เผื่อฐานข้อมูลเก่าไม่มี
   cursor.execute("PRAGMA table_info(characters)")
-  columns = [col[1] for col in cursor.fetchall()]
-  if "lore" not in columns:
+  char_columns = [col[1] for col in cursor.fetchall()]
+  if "lore" not in char_columns:
     cursor.execute("ALTER TABLE characters ADD COLUMN lore TEXT")
 
-  # ตารางเก็บคลังรูปภาพประจำตัวละคร
+  # 2. ตารางคลังรูปภาพตัวละคร
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +60,7 @@ def init_db():
         )
     """)
 
-  # ตารางเก็บประวัติแชท
+  # 3. ตารางประวัติแชท
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +70,12 @@ def init_db():
             image_blob BLOB
         )
     """)
+  # อัปเดตคอลัมน์ image_blob เผื่อฐานข้อมูลเก่าไม่มี
+  cursor.execute("PRAGMA table_info(messages)")
+  msg_columns = [col[1] for col in cursor.fetchall()]
+  if "image_blob" not in msg_columns:
+    cursor.execute("ALTER TABLE messages ADD COLUMN image_blob BLOB")
+
   conn.commit()
   return conn
 
