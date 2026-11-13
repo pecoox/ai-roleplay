@@ -183,7 +183,7 @@ def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
 
-# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์อัตโนมัติตามแต้มสะสม (ระบบเลเวล)
+# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์ตามแต้มสะสม
 def get_relationship_level(score):
   if score < 50:
     return "คนแปลกหน้า"
@@ -1355,7 +1355,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       message_placeholder = st.empty()
 
       if is_cheat:
-        time.sleep(0.5)
+        time.sleep(0.3)
         message_placeholder.markdown(bot_response)
         eval_data = {"score_change": score_change, "quest_update": completed_q_id}
       else:
@@ -1436,7 +1436,6 @@ if st.session_state.in_chat and st.session_state.current_char:
                   (current_user, completed_q_id),
               )
 
-        # 🚀 บวกแต้มสะสมแบบไม่จำกัด (ไม่มีล็อก 100)
         updated_score = max(0, current_affection + score_change + quest_bonus)
         new_lvl = get_relationship_level(updated_score)
 
