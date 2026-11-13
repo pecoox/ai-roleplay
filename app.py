@@ -12,7 +12,7 @@ st.set_page_config(
     layout="centered",
 )
 
-# 🎨 ดีไซน์ CSS พรีเมียมและจัดระเบียบฟอร์มให้ชัดเจน
+# 🎨 ดีไซน์ CSS ปรับแต่งแถบ Sidebar ให้เลื่อนดูง่ายและกระชับขึ้น
 st.markdown(
     """
     <style>
@@ -26,10 +26,11 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* ตกแต่งกล่อง Sidebar ให้เด่นชัด */
+    /* จัดแต่งกล่องข้อความใน Sidebar ให้กะทัดรัด */
     [data-testid="stSidebar"] .stTextInput input, [data-testid="stSidebar"] .stTextArea textarea {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 8px;
+        font-size: 14px;
     }
     </style>
 """,
@@ -113,41 +114,37 @@ with st.sidebar:
   st.divider()
   st.markdown("### 🛠️ สร้างตัวละครใหม่")
 
-  # ฟอร์มสร้างตัวละครจัดเรียงชัดเจน
-  new_name = st.text_input("1️⃣ ชื่อตัวละคร:", placeholder="เช่น มดอ้วน, แฟนหนุ่ม...")
-  new_prompt = st.text_area(
-      "2️⃣ คาแรคเตอร์สั้นๆ:",
-      placeholder="คุณคือเพื่อนสนิทขี้อ้อน...",
-      height=70,
-  )
-  new_lore = st.text_area(
-      "3️⃣ ข้อมูลเชิงลึก (Lore/ประวัติ):",
-      placeholder="เนื้อเรื่องย่อ ความสัมพันธ์ หรือปูมหลัง...",
-      height=90,
-  )
-  new_avatar = st.file_uploader(
-      "4️⃣ อัปโหลดรูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg"]
-  )
+  with st.expander("📌 เปิดฟอร์มสร้างตัวละคร", expanded=True):
+    new_name = st.text_input("ชื่อตัวละคร:", placeholder="เช่น มดอ้วน...")
+    new_prompt = st.text_area(
+        "คาแรคเตอร์สั้นๆ:", placeholder="คุณคือเพื่อนสนิทขี้อ้อน...", height=60
+    )
+    new_lore = st.text_area(
+        "ข้อมูลเชิงลึก (Lore/ประวัติ):",
+        placeholder="เนื้อเรื่องย่อ ความสัมพันธ์...",
+        height=70,
+    )
+    new_avatar = st.file_uploader("รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg"])
 
-  if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
-    if new_name and new_prompt:
-      cursor.execute("SELECT name FROM characters WHERE name = ?", (new_name,))
-      if not cursor.fetchone():
-        avatar_bytes = (
-            new_avatar.getvalue() if new_avatar is not None else None
-        )
-        cursor.execute(
-            "INSERT INTO characters (name, prompt, lore, avatar) VALUES (?, ?, ?, ?)",
-            (new_name, new_prompt, new_lore, avatar_bytes),
-        )
-        conn.commit()
-        st.session_state.current_char = new_name
-        st.success(f"สร้าง '{new_name}' สำเร็จ!")
-        st.rerun()
+    if st.button("🚀 บันทึกสร้างตัวละคร", use_container_width=True):
+      if new_name and new_prompt:
+        cursor.execute("SELECT name FROM characters WHERE name = ?", (new_name,))
+        if not cursor.fetchone():
+          avatar_bytes = (
+              new_avatar.getvalue() if new_avatar is not None else None
+          )
+          cursor.execute(
+              "INSERT INTO characters (name, prompt, lore, avatar) VALUES (?, ?, ?, ?)",
+              (new_name, new_prompt, new_lore, avatar_bytes),
+          )
+          conn.commit()
+          st.session_state.current_char = new_name
+          st.success(f"สร้าง '{new_name}' สำเร็จ!")
+          st.rerun()
+        else:
+          st.warning("ชื่อนี้มีอยู่แล้วในระบบ")
       else:
-        st.warning("ชื่อนี้มีอยู่แล้วในระบบ")
-    else:
-      st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์ให้ครบ")
+        st.warning("⚠️ กรุณากรอกชื่อและคาแรคเตอร์ให้ครบ")
 
   st.divider()
   st.subheader("👥 เลือกตัวละคร")
