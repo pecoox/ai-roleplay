@@ -45,7 +45,7 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมระบบอัปเดตโครงสร้างอัตโนมัติป้องกัน Error
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมป้องกัน IntegrityError
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -118,17 +118,6 @@ def init_db():
         )
     """)
 
-  # ตรวจสอบคอลัมน์ username ใน character_status (กรณีฐานข้อมูลเดิมไม่มี)
-  cursor.execute("PRAGMA table_info(character_status)")
-  status_cols = [col[1] for col in cursor.fetchall()]
-  if "username" not in status_cols:
-    try:
-      cursor.execute(
-          "ALTER TABLE character_status ADD COLUMN username TEXT DEFAULT 'admin'"
-      )
-    except Exception:
-      pass
-
   # ภารกิจส่วนกลาง
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
@@ -169,16 +158,6 @@ def init_db():
             image_blob BLOB
         )
     """)
-
-  cursor.execute("PRAGMA table_info(messages)")
-  msg_cols = [col[1] for col in cursor.fetchall()]
-  if "username" not in msg_cols:
-    try:
-      cursor.execute(
-          "ALTER TABLE messages ADD COLUMN username TEXT DEFAULT 'admin'"
-      )
-    except Exception:
-      pass
 
   conn.commit()
   return conn
@@ -1161,22 +1140,23 @@ if st.session_state.in_chat and st.session_state.current_char:
   else:
     supporting_text = "ไม่มีตัวละครเสริมพิเศษ"
 
+  # ใช้ INSERT OR IGNORE เพื่อป้องกัน IntegrityError เวลาข้อมูลสถานะซ้ำ
+  cursor.execute(
+      """
+      INSERT OR IGNORE INTO character_status (username, char_name, affection_score, relationship_level) 
+      VALUES (?, ?, 0, 'คนแปลกหน้า')
+  """,
+      (current_user, st.session_state.current_char),
+  )
+  conn.commit()
+
   cursor.execute(
       "SELECT affection_score, relationship_level FROM character_status WHERE username = ? AND char_name = ?",
       (current_user, st.session_state.current_char),
   )
   status_row = cursor.fetchone()
-  if not status_row:
-    cursor.execute(
-        "INSERT INTO character_status (username, char_name, affection_score, relationship_level) VALUES (?, ?, 0, 'คนแปลกหน้า')",
-        (current_user, st.session_state.current_char),
-    )
-    conn.commit()
-    current_affection = 0
-    current_rel_level = "คนแปลกหน้า"
-  else:
-    current_affection = status_row[0]
-    current_rel_level = status_row[1]
+  current_affection = status_row[0] if status_row else 0
+  current_rel_level = status_row[1] if status_row else "คนแปลกหน้า"
 
   full_system_prompt = f"""
     {base_prompt}
