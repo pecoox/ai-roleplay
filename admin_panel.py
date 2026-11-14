@@ -28,16 +28,6 @@ def render_admin_sidebar(cursor, conn, all_chars, current_char, is_admin, curren
     selected_action = st.sidebar.selectbox("เลือกโหมดการทำงาน:", actions)
     return selected_action
 
-def run_with_timer(title_text, total_seconds=20):
-    bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้นประมวลผล...)")
-    for i in range(total_seconds):
-        import time
-        time.sleep(1.0)
-        percent = int(((i + 1) / total_seconds) * 100)
-        remaining = total_seconds - (i + 1)
-        bar.progress(percent, text=f"{title_text} — คาดว่าจะเสร็จในอีกประมาณ {remaining} วินาที...")
-    bar.empty()
-
 def handle_admin_actions(action, cursor, conn, all_chars, active_char, client, model_name, current_user, is_admin):
     if action == "💬 หน้าหลักแชท":
         return
@@ -52,7 +42,6 @@ def handle_admin_actions(action, cursor, conn, all_chars, active_char, client, m
             st.success("🟢 สถานะการเชื่อมต่อ: เชื่อมต่อกับ Supabase Cloud สำเร็จและเสถียรปกติ")
             st.metric(label="📊 ขนาดพื้นที่ฐานข้อมูลปัจจุบัน", value=db_info)
             
-            # ดึงสถิติภาพรวมตาราง
             cursor.execute("SELECT COUNT(*) FROM users;")
             u_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM characters;")
@@ -77,8 +66,6 @@ def handle_admin_actions(action, cursor, conn, all_chars, active_char, client, m
             submitted = st.form_submit_button("🚀 ให้ AI สร้างตัวละครให้ทันที", use_container_width=True)
             
             if submitted and char_idea:
-                run_with_timer("กำลังให้ AI สร้างสรรค์คาแรคเตอร์และเรื่องราว", 15)
-                prompt_text = f"สร้างตัวละครแนว {char_idea} ให้มีมิติ มีปม และน่าติดตาม"
                 try:
                     response = client.models.generate_content(
                         model=model_name,
@@ -103,7 +90,7 @@ def handle_admin_actions(action, cursor, conn, all_chars, active_char, client, m
                         ON CONFLICT (name) DO UPDATE SET prompt = EXCLUDED.prompt, personality = EXCLUDED.personality, lore = EXCLUDED.lore
                     """, (c_name, c_prompt, c_pers, c_lore, c_first, current_user))
                     conn.commit()
-                    st.success(f"🎉 สร้างตัวละคร '{c_name' สำเร็จเรียบร้อย!")
+                    st.success(f"🎉 สร้างตัวละคร '{c_name}' สำเร็จเรียบร้อย!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการสร้างด้วย AI: {str(e)}")
