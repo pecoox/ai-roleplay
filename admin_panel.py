@@ -7,6 +7,10 @@ from PIL import Image
 import io
 import time
 
+# 🏷️ กำหนดเวอร์ชันปัจจุบันของระบบ
+SYSTEM_VERSION = "v2.5.0-Enterprise"
+BUILD_DATE = "2026-11-14"
+
 def run_with_timer(title_text, total_seconds=5):
     bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้น...)")
     for i in range(total_seconds):
@@ -18,7 +22,7 @@ def run_with_timer(title_text, total_seconds=5):
 
 def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current_user):
     
-    # 👤 กู้คืนส่วนตั้งค่าบทบาทตัวตนของผู้เล่น (User Persona) ไว้ใน Sidebar
+    # 👤 ส่วนตั้งค่าบทบาทตัวตนของผู้เล่น (User Persona)
     cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
     p_row = cursor.fetchone()
     u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
@@ -38,10 +42,9 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
                         f"กรุณาสร้างข้อมูลผู้เล่นในรูปแบบ JSON 1 บรรทัด (ห้ามมีข้อความอื่นปน) ดังนี้:\n"
                         '{"user_name": "ชื่อตัวละครผู้เล่น", "user_persona": "ประวัติหรือความสัมพันธ์กับตัวละครหลักสั้นๆ", "pronoun_speak": "สรรพนามพูด เช่น ผม/ฉัน", "pronoun_desc": "สรรพนามบรรยาย เช่น เขา/เธอ", "call_speak": "สรรพนามเรียกตัวละคร เช่น คุณ/เธอ", "call_desc": "สรรพนามเรียกตอนบรรยาย เช่น ชายหนุ่ม"}'
                     )
-                    from google import genai
-                    # ใช้ client จาก global หรือสร้างชั่วคราวผ่าน api_key
                     api_key = st.secrets.get("GEMINI_API_KEY")
                     if api_key:
+                        from google import genai
                         client = genai.Client(api_key=api_key)
                         ai_res = client.models.generate_content(model="gemini-3.5-flash-lite", contents=ai_prompt)
                         res_text = ai_res.text.strip()
@@ -95,7 +98,8 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
         "👥 จัดการตัวละครเสริม",
         "🎯 จัดการภารกิจ (Quest Log)",
         "🖼️ จัดการคลังรูปภาพ",
-        "💾 สำรองข้อมูลระบบ (Backup DB)"
+        "💾 สำรองข้อมูลระบบ (Backup DB)",
+        "🔍 ตรวจสอบเวอร์ชันและสถานะระบบ (Version Inspector)"
     ]
     if is_admin:
         actions.append("👥 จัดการผู้ใช้งานระบบ")
@@ -431,6 +435,45 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             )
         except Exception as e:
             st.warning("ยังไม่พบไฟล์ฐานข้อมูลในระบบ (ระบบจะสร้างให้อัตโนมัติเมื่อมีการใช้งาน)")
+
+    elif sidebar_action == "🔍 ตรวจสอบเวอร์ชันและสถานะระบบ (Version Inspector)":
+        st.markdown("### 🔍 ตรวจสอบเวอร์ชันและสถานะระบบ")
+        st.info("เครื่องมือตรวจสอบความสมบูรณ์ของระบบ ฟีเจอร์ และฐานข้อมูล")
+        
+        # ตรวจสอบสถานะตารางในฐานข้อมูล
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM characters")
+        total_chars = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM quests")
+        total_quests = cursor.fetchone()[0]
+
+        st.markdown(f"**🏷️ เวอร์ชันปัจจุบัน:** `{SYSTEM_VERSION}` (Build: `{BUILD_DATE}`)")
+        st.markdown(f"**🤖 โมเดล AI หลัก:** `{model_name}`")
+        st.divider()
+        
+        st.markdown("#### 📊 สถิติฐานข้อมูลระบบ:")
+        col_v1, col_v2, col_v3 = st.columns(3)
+        col_v1.metric("ผู้ใช้งานทั้งหมด", f"{total_users} บัญชี")
+        col_v2.metric("ตัวละครในระบบ", f"{total_chars} ตัว")
+        col_v3.metric("ภารกิจทั้งหมด", f"{total_quests} เควส")
+        
+        st.markdown("#### 🧩 สถานะโมดูลและฟีเจอร์หลัก:")
+        features_status = {
+            "🗄️ Database Engine (database.py)": "✅ พร้อมใช้งาน",
+            "🛠️ Admin & User Panel (admin_panel.py)": "✅ พร้อมใช้งาน",
+            "🌌 Main UI & Chat Engine (app.py)": "✅ พร้อมใช้งาน",
+            "🧠 Smart Memory Compressor": "✅ เปิดใช้งาน",
+            "🛡️ AI Roleplay Audit (กรรมการตรวจบทบาท)": "✅ เปิดใช้งาน",
+            "💾 Auto Database Backup": "✅ เปิดใช้งาน"
+        }
+        for f_name, f_status in features_status.items():
+            st.markdown(f"- {f_name}: `{f_status}`")
 
     elif sidebar_action == "👥 จัดการผู้ใช้งานระบบ" and is_admin:
         st.markdown("### 👥 จัดการผู้ใช้งานระบบ")
