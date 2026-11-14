@@ -3,22 +3,32 @@ import streamlit as st
 import hashlib
 
 def init_db():
-    # ดึงค่าจาก Streamlit Secrets แบบแยกส่วน ป้องกันปัญหาพาร์สลิงก์ผิดพลาด
-    # (หากใน Secrets ตั้งเป็น SUPABASE_URL ไว้ ให้แก้มาใช้รูปแบบแยกตัวแปรด้านล่างนี้แทนครับ)
-    db_host = st.secrets.get("DB_HOST", "db.yzulydpgqbzryanjlcoi.supabase.co")
-    db_port = st.secrets.get("DB_PORT", "6543") # ใช้พอร์ต 6543 (Pooler) เพื่อทะลวง IPv4 ของ Streamlit
-    db_name = st.secrets.get("DB_NAME", "postgres")
-    db_user = st.secrets.get("DB_USER", "postgres")
-    db_pass = st.secrets.get("DB_PASSWORD", "pp0952519677")
+    # รองรับทั้งแบบระบุ SUPABASE_URL ยาวๆ หรือแยกตัวแปร
+    url = st.secrets.get("SUPABASE_URL", "")
+    
+    if url:
+        if "?" in url:
+            conn_url = f"{url}&sslmode=require"
+        else:
+            conn_url = f"{url}?sslmode=require"
+        conn = psycopg2.connect(conn_url)
+    else:
+        # กรณีแยกตัวแปร
+        db_host = st.secrets.get("DB_HOST", "aws-0-ap-southeast-1.pooler.supabase.com")
+        db_port = st.secrets.get("DB_PORT", "5432")
+        db_name = st.secrets.get("DB_NAME", "postgres")
+        db_user = st.secrets.get("DB_USER", "postgres.yzulydpgqbzryanjlcoi")
+        db_pass = st.secrets.get("DB_PASSWORD", "pp0952519677")
 
-    conn = psycopg2.connect(
-        host=db_host,
-        port=db_port,
-        dbname=db_name,
-        user=db_user,
-        password=db_pass,
-        sslmode="require"
-    )
+        conn = psycopg2.connect(
+            host=db_host,
+            port=db_port,
+            dbname=db_name,
+            user=db_user,
+            password=db_pass,
+            sslmode="require"
+        )
+
     cursor = conn.cursor()
     
     # สร้างตารางทั้งหมด
