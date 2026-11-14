@@ -15,6 +15,7 @@ st.markdown("""
     .stChatMessage { border-radius: 18px !important; padding: 16px 20px !important; margin-bottom: 14px !important; box-shadow: 0 3px 10px rgba(0,0,0,0.07); border: 1px solid rgba(255,255,255,0.08); }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     .stChatMessage p { line-height: 1.65 !important; margin-bottom: 10px !important; word-break: break-word; }
+    .affection-badge { display: inline-block; background: linear-gradient(135deg, rgba(255,105,180,0.2), rgba(138,43,226,0.2)); border: 1px solid rgba(255,105,180,0.4); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #ff99cc; font-weight: bold; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -205,7 +206,9 @@ if st.session_state.in_chat and st.session_state.current_char:
 - ตัวละครเสริมในฉาก: {supporting_text}
 - ความทรงจำระยะยาว: "{long_term_memory}"
 - ผู้สนทนา: {u_name} | ความสัมพันธ์: {current_rel_level} ({current_affection} แต้ม)
-กฎ: บรรยายท่าทางให้อยู่ใน *...* และบทพูดใน "..." บรรทัดสุดท้ายต้องเป็น JSON นี้เป๊ะๆ:
+กฎบังคับ:
+1. บรรยายท่าทางให้อยู่ใน *...* และบทพูดใน "..."
+2. บรรทัดสุดท้ายสุดของข้อความทั้งหมด ต้องส่งออกเป็น JSON รูปแบบนี้เป๊ะๆ (ห้ามมีข้อความอื่นต่อท้าย):
 {{"score_change": 2, "quest_update": null, "memory_update": "[สรุปสั้นๆ]"}}
 """
 
@@ -240,6 +243,20 @@ if st.session_state.in_chat and st.session_state.current_char:
                         st.markdown("### 📜 ตอนนิยายของคุณ:")
                         st.write(novel_res.text)
 
+    # 💖 แสดงแถบค่าความสนิทและสถานะความสัมพันธ์
+    st.markdown(f'<div class="affection-badge">💖 ความสัมพันธ์: {current_rel_level} | แต้มความสนิท: {current_affection} คะแนน</div>', unsafe_allow_html=True)
+
+    # 🎯 แสดงรายการภารกิจ (Quest Log)
+    with st.expander("🎯 ภารกิจปัจจุบัน (Quest Log)"):
+        cursor.execute("SELECT id, task_desc, reward_points, is_completed FROM quests WHERE char_name = ?", (st.session_state.current_char,))
+        quests = cursor.fetchall()
+        if quests:
+            for q_id, q_desc, q_pts, q_done in quests:
+                status_icon = "✅" if q_done else "⏳"
+                st.markdown(f"- {status_icon} **{q_desc}** *(รางวัล: {q_pts} แต้ม)*")
+        else:
+            st.info("ยังไม่มีภารกิจสำหรับตัวละครนี้")
+
     st.divider()
 
     for message in current_messages:
@@ -255,9 +272,31 @@ if st.session_state.in_chat and st.session_state.current_char:
             try:
                 response = client.chats.create(model=model_name, config={"system_instruction": roleplay_instruction}).send_message(user_input)
                 raw_t = response.text
-                clean_t = raw_t.split("{")[0].strip() if "{" in raw_t else raw_t.strip()
+                
+                # แยกข้อความแชทกับ JSON สเตตัสที่ AI ส่งกลับมา
+                if "{" in raw_t and "}" in raw_t:
+                    clean_t = raw_t[:raw_t.find("{")].strip()
+                    json_str = raw_t[raw_t.find("{"):raw_t.rfind("}")+1]
+                    try:
+                        ai_data = json.loads(json_str)
+                        score_change = ai_data.get("score_change", 1)
+                        memory_update = ai_data.get("memory_update", "")
+                        
+                        # อัปเดตแต้มความสนิท
+                        new_score = current_affection + score_change
+                        new_level = get_relationship_level(new_score)
+                        cursor.execute("UPDATE character_status SET affection_score = ?, relationship_level = ? WHERE username = ? AND char_name = ?", (new_score, new_level, current_user, st.session_state.current_char))
+                        
+                        # อัปเดตความทรงจำระยะยาว
+                        if memory_update:
+                            cursor.execute("INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)", (current_user, st.session_state.current_char, memory_update))
+                        conn.commit()
+                    except:
+                        pass
+                else:
+                    clean_t = raw_t.strip()
             except Exception as e:
-                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหม่อีกครั้ง*"
+                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหมอีกครั้ง*"
 
             attached_photo_bytes = None
             cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
