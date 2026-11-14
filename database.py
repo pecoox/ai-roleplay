@@ -1,8 +1,10 @@
-import sqlite3
+import streamlit as st
+import psycopg2
 import hashlib
 
 def init_db():
-    conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
+    db_url = st.secrets["SUPABASE_URL"]
+    conn = psycopg2.connect(db_url, sslmode='require')
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -19,15 +21,12 @@ def init_db():
         )
     """)
 
-    cursor.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "is_admin" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
-    if "user_name" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''")
-    if "user_persona" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN user_persona TEXT DEFAULT ''")
-    if "pronoun_speak" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN pronoun_speak TEXT DEFAULT ''")
-    if "pronoun_desc" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN pronoun_desc TEXT DEFAULT ''")
-    if "call_speak" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_speak TEXT DEFAULT ''")
-    if "call_desc" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
+    admin_pass_hashed = hashlib.sha256("admin".encode()).hexdigest()
+    cursor.execute("""
+        INSERT INTO users (username, password, is_admin, user_name) 
+        VALUES ('admin', %s, 1, 'Admin')
+        ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, is_admin = 1
+    """, (admin_pass_hashed,))
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
@@ -36,25 +35,20 @@ def init_db():
             personality TEXT,
             lore TEXT,
             first_message TEXT,
-            avatar BLOB,
+            avatar BYTEA,
             creator TEXT DEFAULT 'admin'
         )
     """)
-    
-    cursor.execute("PRAGMA table_info(characters)")
-    c_cols = [col[1] for col in cursor.fetchall()]
-    if "creator" not in c_cols:
-        cursor.execute("ALTER TABLE characters ADD COLUMN creator TEXT DEFAULT 'admin'")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             char_name TEXT,
             sub_name TEXT,
             sub_prompt TEXT,
             sub_personality TEXT,
             sub_lore TEXT,
-            sub_avatar BLOB
+            sub_avatar BYTEA
         )
     """)
 
@@ -79,7 +73,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             char_name TEXT,
             task_desc TEXT,
             reward_points INTEGER DEFAULT 10
@@ -97,26 +91,21 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             char_name TEXT,
-            photo BLOB,
+            photo BYTEA,
             photo_hash TEXT
         )
     """)
 
-    cursor.execute("PRAGMA table_info(character_photos)")
-    p_cols = [col[1] for col in cursor.fetchall()]
-    if "photo_hash" not in p_cols:
-        cursor.execute("ALTER TABLE character_photos ADD COLUMN photo_hash TEXT DEFAULT ''")
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT,
             char_name TEXT,
             role TEXT,
             content TEXT,
-            image_blob BLOB
+            image_blob BYTEA
         )
     """)
 
