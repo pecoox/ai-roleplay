@@ -3,7 +3,6 @@ import streamlit as st
 import hashlib
 
 def init_db():
-    # รองรับทั้งแบบระบุ SUPABASE_URL ยาวๆ หรือแยกตัวแปร
     url = st.secrets.get("SUPABASE_URL", "")
     
     if url:
@@ -13,7 +12,6 @@ def init_db():
             conn_url = f"{url}?sslmode=require"
         conn = psycopg2.connect(conn_url)
     else:
-        # กรณีแยกตัวแปร
         db_host = st.secrets.get("DB_HOST", "aws-0-ap-southeast-1.pooler.supabase.com")
         db_port = st.secrets.get("DB_PORT", "5432")
         db_name = st.secrets.get("DB_NAME", "postgres")
@@ -31,7 +29,6 @@ def init_db():
 
     cursor = conn.cursor()
     
-    # สร้างตารางทั้งหมด
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -130,3 +127,15 @@ def get_relationship_level(score):
     elif score >= 150: return "เพื่อนสนิท"
     elif score >= 50: return "คนคุ้นเคย"
     return "คนแปลกหน้า"
+
+def check_database_status(conn):
+    try:
+        cursor = conn.cursor()
+        # ทดสอบการเชื่อมต่อ
+        cursor.execute("SELECT 1;")
+        # เช็คขนาดพื้นที่ฐานข้อมูลปัจจุบันบน Supabase
+        cursor.execute("SELECT pg_size_pretty(pg_database_size(current_database()));")
+        db_size = cursor.fetchone()[0]
+        return True, db_size
+    except Exception as e:
+        return False, str(e)
