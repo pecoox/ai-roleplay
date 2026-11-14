@@ -5,6 +5,7 @@ import io
 import random
 import json
 import psycopg2
+import time
 from database import init_db, hash_password, get_relationship_level
 from admin_panel import render_admin_sidebar, handle_admin_actions, run_with_timer
 
@@ -165,7 +166,7 @@ if not st.session_state.in_chat:
             with cols[idx % 3]:
                 with st.container(border=True):
                     if c_av: st.image(Image.open(io.BytesIO(bytes(c_av))), use_container_width=True)
-                    else: st.image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", use_container_width=True)
+                    else: st.image("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500", use_container_width=True)
                     st.markdown(f"### 🌟 {c_name}")
                     
                     btn_col1, btn_col2 = st.columns(2)
