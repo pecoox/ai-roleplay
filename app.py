@@ -7,7 +7,7 @@ import json
 import psycopg2
 import time
 from database import init_db, hash_password, get_relationship_level
-from admin_panel import render_admin_sidebar, handle_admin_actions, run_with_timer
+from admin_panel import render_admin_sidebar, handle_admin_actions
 
 st.set_page_config(page_title="AI Roleplay - Universe & Character Hub", page_icon="🌌", layout="wide")
 
