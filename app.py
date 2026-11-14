@@ -223,6 +223,20 @@ def get_relationship_level(score):
   return levels[idx][1]
 
 
+# ⏳ ฟังก์ชันจำลองการรอพร้อมแสดงผล Progress Bar และเวลาถอยหลังแบบละเมียดละไม
+def run_with_timer(title_text, total_seconds=5):
+  bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้น...)")
+  for i in range(total_seconds):
+    time.sleep(1.0)
+    percent = int(((i + 1) / total_seconds) * 100)
+    remaining = total_seconds - (i + 1)
+    bar.progress(
+        percent,
+        text=f"{title_text} — คาดว่าจะเสร็จในอีก {remaining} วินาที...",
+    )
+  bar.empty()
+
+
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 if "username" not in st.session_state:
@@ -367,56 +381,56 @@ with st.sidebar:
   with st.expander("⚙️ ตั้งค่าบทบาทตัวตนของคุณ"):
     if st.session_state.current_char:
       if st.button("✨ ให้ AI สร้างบทบาทให้เข้ากับเรื่องนี้", use_container_width=True):
-        with st.spinner("AI กำลังสร้างบทบาทที่เหมาะสม..."):
-          try:
+        run_with_timer("AI กำลังวิเคราะห์และสร้างบทบาทตัวผู้เล่น", 4)
+        try:
+          cursor.execute(
+              "SELECT prompt, personality, lore FROM characters WHERE name = ?",
+              (st.session_state.current_char,),
+          )
+          c_info = cursor.fetchone()
+          c_p, c_pers, c_l = c_info if c_info else ("", "", "")
+
+          ai_prompt = (
+              f"คุณคือผู้ช่วยสร้างบทบาทผู้เล่น (User Persona) สำหรับนำไปสวมบทบาทร่วมกับตัวละครหลักชื่อ '{st.session_state.current_char}'\n"
+              f"ข้อมูลตัวละครหลัก: {c_p} | นิสัย: {c_pers} | เรื่องราว: {c_l}\n\n"
+              f"กรุณาสร้างข้อมูลผู้เล่นในรูปแบบ JSON 1 บรรทัด (ห้ามมีข้อความอื่นปน) ดังนี้:\n"
+              '{"user_name": "ชื่อตัวละครผู้เล่น", "user_persona": "ประวัติหรือความสัมพันธ์กับตัวละครหลักสั้นๆ", "pronoun_speak": "สรรพนามพูด เช่น ผม/ฉัน", "pronoun_desc": "สรรพนามบรรยาย เช่น เขา/เธอ", "call_speak": "สรรพนามเรียกตัวละคร เช่น คุณ/เธอ", "call_desc": "สรรพนามเรียกตอนบรรยาย เช่น ชายหนุ่ม"}'
+          )
+          ai_res = client.models.generate_content(
+              model=model_name, contents=ai_prompt
+          )
+          res_text = ai_res.text.strip()
+          if "{" in res_text and "}" in res_text:
+            json_str = res_text[res_text.find("{") : res_text.rfind("}") + 1]
+            p_data = json.loads(json_str)
+            u_name = p_data.get("user_name", u_name)
+            u_persona = p_data.get("user_persona", u_persona)
+            u_pspeak = p_data.get("pronoun_speak", u_pspeak)
+            u_pdesc = p_data.get("pronoun_desc", u_pdesc)
+            u_cspeak = p_data.get("call_speak", u_cspeak)
+            u_cdesc = p_data.get("call_desc", u_cdesc)
+
             cursor.execute(
-                "SELECT prompt, personality, lore FROM characters WHERE name = ?",
-                (st.session_state.current_char,),
-            )
-            c_info = cursor.fetchone()
-            c_p, c_pers, c_l = c_info if c_info else ("", "", "")
-
-            ai_prompt = (
-                f"คุณคือผู้ช่วยสร้างบทบาทผู้เล่น (User Persona) สำหรับนำไปสวมบทบาทร่วมกับตัวละครหลักชื่อ '{st.session_state.current_char}'\n"
-                f"ข้อมูลตัวละครหลัก: {c_p} | นิสัย: {c_pers} | เรื่องราว: {c_l}\n\n"
-                f"กรุณาสร้างข้อมูลผู้เล่นในรูปแบบ JSON 1 บรรทัด (ห้ามมีข้อความอื่นปน) ดังนี้:\n"
-                '{"user_name": "ชื่อตัวละครผู้เล่น", "user_persona": "ประวัติหรือความสัมพันธ์กับตัวละครหลักสั้นๆ", "pronoun_speak": "สรรพนามพูด เช่น ผม/ฉัน", "pronoun_desc": "สรรพนามบรรยาย เช่น เขา/เธอ", "call_speak": "สรรพนามเรียกตัวละคร เช่น คุณ/เธอ", "call_desc": "สรรพนามเรียกตอนบรรยาย เช่น ชายหนุ่ม"}'
-            )
-            ai_res = client.models.generate_content(
-                model=model_name, contents=ai_prompt
-            )
-            res_text = ai_res.text.strip()
-            if "{" in res_text and "}" in res_text:
-              json_str = res_text[res_text.find("{") : res_text.rfind("}") + 1]
-              p_data = json.loads(json_str)
-              u_name = p_data.get("user_name", u_name)
-              u_persona = p_data.get("user_persona", u_persona)
-              u_pspeak = p_data.get("pronoun_speak", u_pspeak)
-              u_pdesc = p_data.get("pronoun_desc", u_pdesc)
-              u_cspeak = p_data.get("call_speak", u_cspeak)
-              u_cdesc = p_data.get("call_desc", u_cdesc)
-
-              cursor.execute(
-                  """
+                """
                     UPDATE users 
                     SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
                     WHERE username = ?
                 """,
-                  (
-                      u_name,
-                      u_persona,
-                      u_pspeak,
-                      u_pdesc,
-                      u_cspeak,
-                      u_cdesc,
-                      current_user,
-                  ),
-              )
-              conn.commit()
-              st.success("AI สร้างบทบาทให้เรียบร้อยแล้ว!")
-              st.rerun()
-          except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+                (
+                    u_name,
+                    u_persona,
+                    u_pspeak,
+                    u_pdesc,
+                    u_cspeak,
+                    u_cdesc,
+                    current_user,
+                ),
+            )
+            conn.commit()
+            st.success("AI สร้างบทบาทให้เรียบร้อยแล้ว!")
+            st.rerun()
+        except Exception as e:
+          st.error(f"เกิดข้อผิดพลาด: {e}")
 
     with st.form("user_persona_detailed_form"):
       edit_uname = st.text_input("ชื่อของคุณ:", value=u_name)
@@ -530,89 +544,76 @@ with st.sidebar:
       )
 
       if ai_submit_btn and ai_target_name:
-        with st.spinner(
-            f"กำลังให้ AI สร้างข้อมูลทั้งหมดของ '{ai_target_name}'..."
-        ):
-          try:
-            prompt_gen = (
-                f"คุณคือผู้เชี่ยวชาญการสร้างข้อมูลตัวละครสำหรับ Roleplay กรุณาสร้างข้อมูลแบบละเอียดสำหรับ '{ai_target_name}' ในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
-                "{\n"
-                f'  "name": "{ai_target_name}",\n'
-                '  "prompt": "คาแรคเตอร์หลักและบทบาทของตัวละครนี้",\n'
-                '  "personality": "บุคลิกและนิสัยใจคอ",\n'
-                '  "lore": "เรื่องราวพื้นหลังและความสัมพันธ์",\n'
-                '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2", "ข้อความเปิดตัวแบบที่ 3"],\n'
-                '  "sub_name": "ชื่อตัวละครเสริมรอบตัว 1 คน",\n'
-                '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
-                '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
-                '  "quest_desc": "ภารกิจเริ่มต้นชวนทำกิจกรรมร่วมกัน"\n'
-                "}"
+        run_with_timer("AI กำลังเนรมิตข้อมูลตัวละครหลักและเรื่องราวเชิงลึก", 6)
+        try:
+          prompt_gen = (
+              f"คุณคือผู้เชี่ยวชาญการสร้างข้อมูลตัวละครสำหรับ Roleplay กรุณาสร้างข้อมูลแบบละเอียดสำหรับ '{ai_target_name}' ในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+              "{\n"
+              f'  "name": "{ai_target_name}",\n'
+              '  "prompt": "คาแรคเตอร์หลักและบทบาทของตัวละครนี้",\n'
+              '  "personality": "บุคลิกและนิสัยใจคอ",\n'
+              '  "lore": "เรื่องราวพื้นหลังและความสัมพันธ์",\n'
+              '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2", "ข้อความเปิดตัวแบบที่ 3"],\n'
+              '  "sub_name": "ชื่อตัวละครเสริมรอบตัว 1 คน",\n'
+              '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
+              '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
+              '  "quest_desc": "ภารกิจเริ่มต้นชวนทำกิจกรรมร่วมกัน"\n'
+              "}"
+          )
+          response = client.models.generate_content(
+              model=model_name, contents=prompt_gen
+          )
+          raw_res = response.text.strip()
+
+          if "{" in raw_res and "}" in raw_res:
+            json_text = raw_res[raw_res.find("{") : raw_res.rfind("}") + 1]
+            char_info = json.loads(json_text)
+
+            c_name = char_info.get("name", ai_target_name)
+            c_prompt = char_info.get("prompt", "คุณคือ...")
+            c_pers = char_info.get("personality", "เงียบขรึม...")
+            c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
+            f_msgs = char_info.get(
+                "first_messages",
+                [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
             )
-            response = client.models.generate_content(
-                model=model_name, contents=prompt_gen
+            s_name = char_info.get("sub_name", "ผู้จัดการส่วนตัว")
+            s_prompt = char_info.get("sub_prompt", "คอยดูแลตารางงาน")
+            s_pers = char_info.get("sub_personality", "เข้มงวด รักความสะอาด")
+            q_desc = char_info.get(
+                "quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม"
             )
-            raw_res = response.text.strip()
 
-            if "{" in raw_res and "}" in raw_res:
-              json_text = raw_res[
-                  raw_res.find("{") : raw_res.rfind("}") + 1
-              ]
-              char_info = json.loads(json_text)
-
-              c_name = char_info.get("name", ai_target_name)
-              c_prompt = char_info.get("prompt", "คุณคือ...")
-              c_pers = char_info.get("personality", "เงียบขรึม...")
-              c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
-              f_msgs = char_info.get(
-                  "first_messages",
-                  [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
-              )
-              s_name = char_info.get("sub_name", "ผู้จัดการส่วนตัว")
-              s_prompt = char_info.get("sub_prompt", "คอยดูแลตารางงาน")
-              s_pers = char_info.get("sub_personality", "เข้มงวด รักความสะอาด")
-              q_desc = char_info.get(
-                  "quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม"
-              )
-
-              cursor.execute(
-                  "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
-                  (
-                      c_name,
-                      c_prompt,
-                      c_pers,
-                      c_lore,
-                      json.dumps(f_msgs, ensure_ascii=False),
-                      None,
-                  ),
-              )
-
-              cursor.execute(
-                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                  (
-                      c_name,
-                      s_name,
-                      s_prompt,
-                      s_pers,
-                      "เป็นบุคคลใกล้ชิดในวงสังคม",
-                  ),
-              )
-
-              cursor.execute(
-                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                  (c_name, q_desc, 20),
-              )
-
-              conn.commit()
-              st.session_state.current_char = c_name
-              st.session_state.in_chat = True
-              st.success(
-                  f"🎉 สร้างตัวละคร '{c_name}' พร้อมใช้งานสำเร็จเรียบร้อยแล้ว!"
-              )
-              st.rerun()
-            else:
-              st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI")
-          except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+            cursor.execute(
+                "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    c_name,
+                    c_prompt,
+                    c_pers,
+                    c_lore,
+                    json.dumps(f_msgs, ensure_ascii=False),
+                    None,
+                ),
+            )
+            cursor.execute(
+                "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
+                (c_name, s_name, s_prompt, s_pers, "เป็นบุคคลใกล้ชิดในวงสังคม"),
+            )
+            cursor.execute(
+                "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                (c_name, q_desc, 20),
+            )
+            conn.commit()
+            st.session_state.current_char = c_name
+            st.session_state.in_chat = True
+            st.success(
+                f"🎉 สร้างตัวละคร '{c_name}' พร้อมใช้งานสำเร็จเรียบร้อยแล้ว!"
+            )
+            st.rerun()
+          else:
+            st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI")
+        except Exception as e:
+          st.error(f"เกิดข้อผิดพลาด: {e}")
 
   elif is_current_admin and sidebar_action == "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)":
     st.markdown("### 🌐 นำเข้าตัวละครจากข้อมูลหน้าเว็บ")
@@ -625,89 +626,85 @@ with st.sidebar:
       )
 
       if parse_submit_btn and pasted_text:
-        with st.spinner("AI กำลังแยกวิเคราะห์ข้อมูล..."):
-          try:
-            parser_prompt = (
-                f"คุณคือผู้เชี่ยวชาญการแยกแยะและจัดโครงสร้างข้อมูลตัวละครสำหรับ AI Roleplay\n"
-                f"ข้อมูลดิบที่ผู้ใช้นำมาวาง:\n{pasted_text}\n\n"
-                f"กรุณาวิเคราะห์และส่งออกเป็นรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
-                "{\n"
-                '  "name": "ชื่อตัวละครหลัก",\n'
-                '  "prompt": "สรุปคาแรคเตอร์หลัก",\n'
-                '  "personality": "รายละเอียดบุคลิก",\n'
-                '  "lore": "เรื่องราวพื้นหลัง",\n'
-                '  "first_messages": ["ข้อความเปิดตัว 1", "ข้อความเปิดตัว 2"],\n'
-                '  "supporting_chars": [{"name": "ชื่อตัวเสริม", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ประวัติ"}],\n'
-                '  "quests": [{"desc": "ภารกิจ", "pts": 15}]\n'
-                "}"
+        run_with_timer("AI กำลังวิเคราะห์ แยกแยะ และจัดโครงสร้างข้อมูล", 6)
+        try:
+          parser_prompt = (
+              f"คุณคือผู้เชี่ยวชาญการแยกแยะและจัดโครงสร้างข้อมูลตัวละครสำหรับ AI Roleplay\n"
+              f"ข้อมูลดิบที่ผู้ใช้นำมาวาง:\n{pasted_text}\n\n"
+              f"กรุณาวิเคราะห์และส่งออกเป็นรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+              "{\n"
+              '  "name": "ชื่อตัวละครหลัก",\n'
+              '  "prompt": "สรุปคาแรคเตอร์หลัก",\n'
+              '  "personality": "รายละเอียดบุคลิก",\n'
+              '  "lore": "เรื่องราวพื้นหลัง",\n'
+              '  "first_messages": ["ข้อความเปิดตัว 1", "ข้อความเปิดตัว 2"],\n'
+              '  "supporting_chars": [{"name": "ชื่อตัวเสริม", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ประวัติ"}],\n'
+              '  "quests": [{"desc": "ภารกิจ", "pts": 15}]\n'
+              "}"
+          )
+          response = client.models.generate_content(
+              model=model_name, contents=parser_prompt
+          )
+          raw_res = response.text.strip()
+
+          if "{" in raw_res and "}" in raw_res:
+            json_text = raw_res[raw_res.find("{") : raw_res.rfind("}") + 1]
+            parsed_data = json.loads(json_text)
+
+            c_name = parsed_data.get("name", "ตัวละครนำเข้า")
+            c_prompt = parsed_data.get("prompt", "คุณคือ...")
+            c_pers = parsed_data.get("personality", "น่าสนใจ...")
+            c_lore = parsed_data.get("lore", "ประวัติ...")
+            f_msgs = parsed_data.get(
+                "first_messages",
+                [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
             )
-            response = client.models.generate_content(
-                model=model_name, contents=parser_prompt
+            sub_list = parsed_data.get("supporting_chars", [])
+            quest_list = parsed_data.get("quests", [])
+
+            cursor.execute(
+                "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    c_name,
+                    c_prompt,
+                    c_pers,
+                    c_lore,
+                    json.dumps(f_msgs, ensure_ascii=False),
+                    None,
+                ),
             )
-            raw_res = response.text.strip()
-
-            if "{" in raw_res and "}" in raw_res:
-              json_text = raw_res[
-                  raw_res.find("{") : raw_res.rfind("}") + 1
-              ]
-              parsed_data = json.loads(json_text)
-
-              c_name = parsed_data.get("name", "ตัวละครนำเข้า")
-              c_prompt = parsed_data.get("prompt", "คุณคือ...")
-              c_pers = parsed_data.get("personality", "น่าสนใจ...")
-              c_lore = parsed_data.get("lore", "ประวัติ...")
-              f_msgs = parsed_data.get(
-                  "first_messages",
-                  [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
-              )
-              sub_list = parsed_data.get("supporting_chars", [])
-              quest_list = parsed_data.get("quests", [])
-
+            for sub in sub_list:
               cursor.execute(
-                  "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
+                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
                   (
                       c_name,
-                      c_prompt,
-                      c_pers,
-                      c_lore,
-                      json.dumps(f_msgs, ensure_ascii=False),
-                      None,
+                      sub.get("name", "ตัวละครเสริม"),
+                      sub.get("prompt", "บทบาท"),
+                      sub.get("personality", "นิสัย"),
+                      sub.get("lore", "ประวัติ"),
                   ),
               )
-
-              for sub in sub_list:
-                cursor.execute(
-                    "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                    (
-                        c_name,
-                        sub.get("name", "ตัวละครเสริม"),
-                        sub.get("prompt", "บทบาท"),
-                        sub.get("personality", "นิสัย"),
-                        sub.get("lore", "ประวัติ"),
-                    ),
-                )
-
-              if quest_list:
-                for q in quest_list:
-                  cursor.execute(
-                      "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                      (c_name, q.get("desc", "ทำภารกิจ"), q.get("pts", 15)),
-                  )
-              else:
+            if quest_list:
+              for q in quest_list:
                 cursor.execute(
                     "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                    (c_name, "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม", 20),
+                    (c_name, q.get("desc", "ทำภารกิจ"), q.get("pts", 15)),
                 )
-
-              conn.commit()
-              st.session_state.current_char = c_name
-              st.session_state.in_chat = True
-              st.success(f"🎉 นำเข้าตัวละคร '{c_name}' สำเร็จเรียบร้อยแล้ว!")
-              st.rerun()
             else:
-              st.error("ไม่สามารถแปลงข้อมูลได้ กรุณาลองใหม่อีกครั้ง")
-          except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+              cursor.execute(
+                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                  (c_name, "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม", 20),
+              )
+
+            conn.commit()
+            st.session_state.current_char = c_name
+            st.session_state.in_chat = True
+            st.success(f"🎉 นำเข้าตัวละคร '{c_name}' สำเร็จเรียบร้อยแล้ว!")
+            st.rerun()
+          else:
+            st.error("ไม่สามารถแปลงข้อมูลได้ กรุณาลองใหม่อีกครั้ง")
+        except Exception as e:
+          st.error(f"เกิดข้อผิดพลาด: {e}")
 
   elif is_current_admin and sidebar_action == "🗑️ ลบตัวละครหลัก":
     st.markdown("### 🗑️ ลบตัวละครหลักที่ไม่ต้องการ")
@@ -1048,7 +1045,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ห้องแชท (พร้อมระบบ AI Game Master / กรรมการตรวจบทบาทสำหรับ Admin)
+# 💬 ห้องแชท (พร้อมระบบ AI Game Master แบบละเอียดขั้นสุด + ตัวนับเวลาถอยหลัง)
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -1104,7 +1101,7 @@ if st.session_state.in_chat and st.session_state.current_char:
   )
 
   roleplay_instruction = f"""
-คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพ และผู้สวมบทบาทตัวละคร '{st.session_state.current_char}'
+คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพชั้นเยี่ยม และผู้สวมบทบาทตัวละคร '{st.session_state.current_char}'
 - ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
 - นิสัย: {char_personality}
 - เรื่องราวพื้นหลัง (Lore): {char_lore}
@@ -1116,13 +1113,14 @@ if st.session_state.in_chat and st.session_state.current_char:
 [ผู้สนทนา]: ชื่อ {u_name} | ประวัติ: {u_persona} | สรรพนามพูด: {u_pspeak} | สรรพนามบรรยาย: {u_pdesc} | เรียกผู้ใช้: {u_cspeak}
 - ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
-[กฎการเขียนบทบาทและการจัดหน้า]:
-1. **จัดย่อหน้าและเว้นบรรทัดให้อ่านง่าย**: ห้ามเขียนเป็นพารากราฟยาวติดกัน ให้เคาะขึ้นบรรทัดใหม่แบ่งฉาก ท่าทาง หรือบทพูดอย่างชัดเจน
-2. **รูปแบบสัดส่วน**: 
+[กฎการเขียนบทบาทระดับพรีเมียม (ละเอียด ลึกซึ้ง และเป็นธรรมชาติ)]:
+1. **การบรรยายเชิงลึก (Deep Descriptive Writing)**: ให้บรรยายท่าทาง แววตา จิตวิทยา และบรรยากาศรอบตัวอย่างประณีต บรรจงสร้างอารมณ์ให้สมจริงเหมือนนิยายขายดี
+2. **จัดย่อหน้าและเว้นบรรทัดให้อ่านง่าย**: ห้ามเขียนเป็นพารากราฟยาวติดกัน ให้เคาะขึ้นบรรทัดใหม่แบ่งฉากอย่างชัดเจน
+3. **รูปแบบสัดส่วน**: 
    - บรรยาย ท่าทาง สีหน้า และความคิดในใจ ให้อยู่ในเครื่องหมาย *...* (แสดงผลเป็นสีเทาอ่อน ตัวตรงปกติ ไม่อียง)
    - บทพูด ให้ใช้เครื่องหมายคำพูดปกติ "{st.session_state.current_char}: \"...\""
-3. **การมีส่วนร่วมของตัวละครเสริม**: ดึงตัวละครเสริมรอบตัวเข้ามาสร้างสีสันในฉากตามความเหมาะสม
-4. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
+4. **การมีส่วนร่วมของตัวละครเสริม**: ดึงตัวละครเสริมรอบตัวเข้ามาสร้างปฏิกิริยาโต้ตอบในฉากอย่างสมจริง
+5. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
 {{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจ หรือ null], "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค]"}}
 """
 
@@ -1198,42 +1196,42 @@ if st.session_state.in_chat and st.session_state.current_char:
       conn.commit()
       st.rerun()
 
-  # 🛠️ [Admin Feature] ปุ่มเรียก AI กรรมการตรวจบทบาท (Game Master Audit)
+  # 🛠️ [Admin Feature] AI กรรมการตรวจบทบาทแบบละเอียดขั้นสุด พร้อม Timer
   if is_current_admin:
     with st.expander(
-        "🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาท (Game Master Audit)"
+        "🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาทแบบละเอียดขั้นสุด"
     ):
       st.caption(
-          "กดปุ่มด้านล่างเพื่อให้ AI กรรมการตรวจสอบบทสนทนาล่าสุดของตัวละครว่าเข้าบทบาท"
-          " มีความเป็นธรรมชาติ และตรงตาม Prompt แค่ไหน"
+          "กดปุ่มด้านล่างเพื่อให้ AI กรรมการตรวจวิเคราะห์บทสนทนาอย่างเจาะลึก"
+          " (ใช้เวลาประมวลผลประมาณ 6 วินาทีเพื่อความแม่นยำสูงสุด)"
       )
       if st.button(
-          "🧪 รัน AI กรรมการตรวจบทบาทตอนนี้", use_container_width=True
+          "🧪 รัน AI กรรมการตรวจบทบาท (ละเอียดขั้นสุด)", use_container_width=True
       ):
-        with st.spinner("AI กรรมการกำลังวิเคราะห์บทสนทนาและพฤติกรรมตัวละคร..."):
-          try:
-            # ดึงประวัติแชทล่าสุดมาให้กรรมการตรวจ
-            recent_chat_log = "\n".join(
-                [f"{m['role']}: {m['content']}" for m in current_messages[-6:]]
-            )
-            audit_prompt = (
-                f"คุณคือ AI Game Master หรือกรรมการผู้เชี่ยวชาญการประเมินการสวมบทบาท (Roleplay Audit)\n"
-                f"ข้อมูลตัวละครหลัก '{st.session_state.current_char}':\n"
-                f"- คาแรคเตอร์: {base_prompt}\n"
-                f"- บุคลิก: {char_personality}\n\n"
-                f"บทสนทนาล่าสุด 6 ข้อความ:\n{recent_chat_log}\n\n"
-                f"กรุณาวิเคราะห์และประเมินในรูปแบบรายงานสั้นๆ (ภาษาไทย) ดังนี้:\n"
-                f"1. **คะแนนความเข้าบทบาท (0-10):** [ใส่คะแนน]\n"
-                f"2. **การวิเคราะห์ความธรรมชาติ & คาแรคเตอร์:** [อธิบายว่าตัวละครเล่นได้ตรงคาแรคเตอร์ไหม มีจุดไหนแข็งทื่อหรือหลุดไหม]\n"
-                f"3. **ข้อเสนอแนะในการปรับปรุง Prompt:** [แนะนำวิธีแก้หรือเพิ่มกฎใน Prompt เพื่อให้ตัวละครสมจริงขึ้น]"
-            )
-            audit_res = client.models.generate_content(
-                model=model_name, contents=audit_prompt
-            )
-            st.markdown("### 📊 ผลการประเมินจาก AI กรรมการ:")
-            st.info(audit_res.text)
-          except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการตรวจสอบ: {e}")
+        run_with_timer("AI กรรมการกำลังตรวจสอบบทสนทนาและจิตวิทยาตัวละคร", 6)
+        try:
+          recent_chat_log = "\n".join(
+              [f"{m['role']}: {m['content']}" for m in current_messages[-8:]]
+          )
+          audit_prompt = (
+              f"คุณคือ AI Game Master ผู้เชี่ยวชาญระดับสูงในการตรวจสอบและวิเคราะห์การสวมบทบาท (Advanced Roleplay & Psychological Audit)\n"
+              f"ข้อมูลตัวละครหลัก '{st.session_state.current_char}':\n"
+              f"- คาแรคเตอร์: {base_prompt}\n"
+              f"- บุคลิก: {char_personality}\n"
+              f"- เรื่องราว (Lore): {char_lore}\n\n"
+              f"บทสนทนาล่าสุด 8 ข้อความ:\n{recent_chat_log}\n\n"
+              f"กรุณาวิเคราะห์และรายงานผลอย่างละเอียดเป็นภาษาไทย โดยครอบคลุมประเด็นต่อไปนี้:\n"
+              f"1. **คะแนนความเข้าบทบาท (0-10):** [พร้อมให้เหตุผลรองรับ]\n"
+              f"2. **การวิเคราะห์เชิงลึก (In-depth Analysis):** [วิเคราะห์ความต่อเนื่องของพล็อต, การรักษาคาแรคเตอร์, จิตวิทยาตัวละคร, และความสมจริงของภาษาบรรยาย]\n"
+              f"3. **จุดที่ควรปรับปรุง & แนวทางแกไข (Constructive Feedback):** [แนะนำจุดที่ยังดูแข็งทื่อ พร้อมระบุวิธีปรับแก้ System Prompt หรือท่าทีของบอทให้มีความเป็นธรรมชาติสูงสุด]"
+          )
+          audit_res = client.models.generate_content(
+              model=model_name, contents=audit_prompt
+          )
+          st.markdown("### 📊 รายงานผลการประเมินเจาะลึกจาก AI กรรมการ:")
+          st.info(audit_res.text)
+        except Exception as e:
+          st.error(f"เกิดข้อผิดพลาดในการตรวจสอบ: {e}")
 
   st.divider()
 
@@ -1322,7 +1320,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         )
         q_data = cursor.fetchone()
         if q_data:
-          bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไปครัว {q_data[1]} แต้ม)*"
+          bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
         else:
           bot_response = (
               f"*(สังเกตการณ์ระบบ: ไม่พบภารกิจหมายเลข #{completed_q_id})*"
@@ -1347,7 +1345,9 @@ if st.session_state.in_chat and st.session_state.current_char:
             "memory_update": None,
         }
       else:
-        message_placeholder.markdown("กำลังประพันธ์เรื่องราว...")
+        message_placeholder.markdown(
+            "AI กำลังเรียบเรียงและประพันธ์เนื้อเรื่องระดับพรีเมียม..."
+        )
         bot_response = None
         eval_data = {}
         max_retries = 3
