@@ -7,8 +7,7 @@ from PIL import Image
 import io
 import time
 
-# 🏷️ กำหนดเวอร์ชันปัจจุบันของระบบ
-SYSTEM_VERSION = "v2.5.0-Enterprise"
+SYSTEM_VERSION = "v2.8.0-Ultimate"
 BUILD_DATE = "2026-11-14"
 
 def run_with_timer(title_text, total_seconds=5):
@@ -21,8 +20,6 @@ def run_with_timer(title_text, total_seconds=5):
     bar.empty()
 
 def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current_user):
-    
-    # 👤 ส่วนตั้งค่าบทบาทตัวตนของผู้เล่น (User Persona)
     cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
     p_row = cursor.fetchone()
     u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
@@ -438,18 +435,10 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
 
     elif sidebar_action == "🔍 ตรวจสอบเวอร์ชันและสถานะระบบ (Version Inspector)":
         st.markdown("### 🔍 ตรวจสอบเวอร์ชันและสถานะระบบ")
-        st.info("เครื่องมือตรวจสอบความสมบูรณ์ของระบบ ฟีเจอร์ และฐานข้อมูล")
-        
-        # ตรวจสอบสถานะตารางในฐานข้อมูล
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [row[0] for row in cursor.fetchall()]
-        
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        
         cursor.execute("SELECT COUNT(*) FROM characters")
         total_chars = cursor.fetchone()[0]
-        
         cursor.execute("SELECT COUNT(*) FROM quests")
         total_quests = cursor.fetchone()[0]
 
@@ -469,7 +458,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             "🛠️ Admin & User Panel (admin_panel.py)": "✅ พร้อมใช้งาน",
             "🌌 Main UI & Chat Engine (app.py)": "✅ พร้อมใช้งาน",
             "🧠 Smart Memory Compressor": "✅ เปิดใช้งาน",
-            "🛡️ AI Roleplay Audit (กรรมการตรวจบทบาท)": "✅ เปิดใช้งาน",
+            "⚡ Cheat Commands (/+ชอบ, /+ผ่านภารกิจ)": "✅ เปิดใช้งาน",
             "💾 Auto Database Backup": "✅ เปิดใช้งาน"
         }
         for f_name, f_status in features_status.items():
