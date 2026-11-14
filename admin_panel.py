@@ -7,8 +7,10 @@ from PIL import Image
 import io
 from ai_engine import run_with_timer
 
-def render_admin_sidebar(cursor, conn, all_chars, active_char):
-    st.markdown("### 🛠️ จัดการระบบ (Admin Only)")
+def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current_user):
+    title_text = "🛠️ จัดการระบบ (Admin Only)" if is_admin else "⚙️ จัดการตัวละครของฉัน"
+    st.markdown(f"### {title_text}")
+    
     sidebar_action = st.selectbox(
         "เลือกการจัดการ:",
         [
@@ -20,12 +22,23 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char):
             "👥 จัดการตัวละครเสริม",
             "🎯 จัดการภารกิจ (Quest Log)",
             "🖼️ จัดการคลังรูปภาพ",
-            "👥 จัดการผู้ใช้งานระบบ"
+            *(["👥 จัดการผู้ใช้งานระบบ"] if is_admin else [])
         ]
     )
     return sidebar_action
 
-def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, client, model_name, current_user):
+def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, client, model_name, current_user, is_admin):
+    
+    # ฟังก์ชันช่วยดึงรายชื่อตัวละครตามสิทธิ์ (Admin เห็นทั้งหมด, User เห็นเฉพาะที่ตัวเองสร้าง)
+    def get_manageable_chars():
+        if is_admin:
+            return all_chars
+        else:
+            cursor.execute("SELECT name FROM characters WHERE creator = ?", (current_user,))
+            return [row[0] for row in cursor.fetchall()]
+
+    user_chars = get_manageable_chars()
+
     if sidebar_action == "✨ สร้างตัวละครหลักด้วย AI (พรีเมียมขั้นสูง)":
         st.markdown("### ✨ สร้างตัวละครหลัก (พรีเมียมขั้นสูง)")
         with st.form("ai_gen_char_form_advanced"):
@@ -92,8 +105,8 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                             avatar_bytes = None
 
                         cursor.execute(
-                            "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
-                            (c_name, c_prompt, c_pers, c_lore, json.dumps(f_msgs, ensure_ascii=False), avatar_bytes)
+                            "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (c_name, c_prompt, c_pers, c_lore, json.dumps(f_msgs, ensure_ascii=False), avatar_bytes, current_user)
                         )
                         for sub in sub_list:
                             cursor.execute(
@@ -113,59 +126,169 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาด: {e}")
 
-    elif sidebar_action == "🖼️ จัดการคลังรูปภาพ" and active_char:
-        st.markdown(f"### 🖼️ จัดการคลังรูปภาพของ: `{active_char}`")
-        with st.form(f"upload_photo_form_{active_char}", clear_on_submit=True):
-            new_photos = st.file_uploader("อัปโหลดรูปภาพเข้าคลัง:", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
-            if st.form_submit_button("📥 บันทึกรูปลงคลัง", use_container_width=True) and new_photos:
-                for photo_file in new_photos:
-                    p_bytes = photo_file.getvalue()
-                    p_hash = hashlib.md5(p_bytes).hexdigest()
-                    cursor.execute("INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)", (active_char, p_bytes, p_hash))
+    elif sidebar_action == "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)":
+        st.markdown("### 🌐 นำเข้าตัวละครจากข้อมูลหน้าเว็บ")
+        with st.form("smart_parser_form"):
+            pasted_text = st.text_area("วางข้อมูลที่ก๊อปปี้มาจากหน้าเว็บที่นี่:", height=250)
+            if st.form_submit_button("🚀 แปลงและบันทึกตัวละคร", use_container_width=True) and pasted_text:
+                run_with_timer("AI กำลังวิเคราะห์ข้อมูล", 4)
+                try:
+                    parser_prompt = f"คุณคือผู้เชี่ยวชาญการจัดโครงสร้างข้อมูลตัวละคร\nข้อมูลดิบ:\n{pasted_text}\n\nส่งออกเป็น JSON 1 บรรทัด:\n{{\"name\": \"...\", \"prompt\": \"...\", \"personality\": \"...\", \"lore\": \"...\", \"first_messages\": [\"...\"], \"supporting_chars\": [{{\"name\": \"...\", \"prompt\": \"...\", \"personality\": \"...\", \"lore\": \"...\"}}], \"quests\": [{{\"desc\": \"...\", \"pts\": 15}}]}}"
+                    response = client.models.generate_content(model=model_name, contents=parser_prompt)
+                    raw_res = response.text.strip()
+                    if "{" in raw_res and "}" in raw_res:
+                        parsed_data = json.loads(raw_res[raw_res.find("{"):raw_res.rfind("}")+1])
+                        c_name = parsed_data.get("name", "ตัวละครนำเข้า")
+                        cursor.execute("INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)", (c_name, parsed_data.get("prompt",""), parsed_data.get("personality",""), parsed_data.get("lore",""), json.dumps(parsed_data.get("first_messages",["สวัสดีครับ"]), ensure_ascii=False), None, current_user))
+                        for sub in parsed_data.get("supporting_chars", []):
+                            cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)", (c_name, sub.get("name",""), sub.get("prompt",""), sub.get("personality",""), sub.get("lore","")))
+                        for q in parsed_data.get("quests", [{"desc": "พูดคุยทำความรู้จัก", "pts": 20}]):
+                            cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (c_name, q.get("desc",""), q.get("pts",20)))
+                        conn.commit()
+                        st.session_state.current_char = c_name
+                        st.session_state.in_chat = True
+                        st.success(f"นำเข้า '{c_name}' สำเร็จ!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาด: {e}")
+
+    elif sidebar_action == "➕ สร้างตัวละครหลักใหม่ (Manual)":
+        st.markdown("### 📌 สร้างตัวละครหลัก (Manual)")
+        with st.form("create_char_manual_form"):
+            m_name = st.text_input("ชื่อตัวละครหลัก:")
+            m_prompt = st.text_area("คาแรคเตอร์:", height=60)
+            m_pers = st.text_area("บุคลิก:", height=60)
+            m_lore = st.text_area("เรื่องราว:", height=60)
+            m_msg = st.text_input("ข้อความเปิดตัวแรก:", value="สวัสดีครับ")
+            if st.form_submit_button("🚀 บันทึกตัวละคร", use_container_width=True) and m_name:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, creator) VALUES (?, ?, ?, ?, ?, ?)",
+                    (m_name, m_prompt, m_pers, m_lore, json.dumps([m_msg], ensure_ascii=False), current_user)
+                )
                 conn.commit()
-                st.success("อัปโหลดรูปภาพสำเร็จ!")
+                st.session_state.current_char = m_name
+                st.session_state.in_chat = True
+                st.success(f"สร้างตัวละคร '{m_name}' สำเร็จ!")
                 st.rerun()
 
-        cursor.execute("SELECT id, photo FROM character_photos WHERE char_name = ?", (active_char,))
-        photos_in_db = cursor.fetchall()
-        if photos_in_db:
-            cols_img = st.columns(3)
-            for idx, (p_id, p_blob) in enumerate(photos_in_db):
-                with cols_img[idx % 3]:
-                    with st.container(border=True):
-                        st.image(Image.open(io.BytesIO(p_blob)), use_container_width=True)
-                        if st.button("🗑️ ลบรูปนี้", key=f"del_photo_{p_id}", use_container_width=True):
-                            cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
-                            conn.commit()
-                            st.rerun()
+    elif sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก":
+        st.markdown("### ✏️ แก้ไขข้อมูลตัวละครหลัก")
+        if user_chars:
+            edit_target = st.selectbox("เลือกตัวละครที่ต้องการแก้ไข:", user_chars, key="edit_target_sel")
+            cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = ?", (edit_target,))
+            e_data = cursor.fetchone()
+            if e_data:
+                with st.form("edit_char_manual_form"):
+                    e_p = st.text_area("คาแรคเตอร์:", value=e_data[0], height=80)
+                    e_pers = st.text_area("บุคลิก:", value=e_data[1], height=80)
+                    e_lore = st.text_area("เรื่องราว:", value=e_data[2], height=80)
+                    if st.form_submit_button("💾 บันทึกการแก้ไข", use_container_width=True):
+                        cursor.execute("UPDATE characters SET prompt = ?, personality = ?, lore = ? WHERE name = ?", (e_p, e_pers, e_lore, edit_target))
+                        conn.commit()
+                        st.success("บันทึกการแก้ไขสำเร็จ!")
+                        st.rerun()
+        else:
+            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของให้แก้ไข")
 
-    elif sidebar_action == "👥 จัดการตัวละครเสริม" and active_char:
-        st.markdown(f"### 👥 ตัวละครเสริมในเรื่อง: `{active_char}`")
-        sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/เลื่อนขั้น"], key="sub_rad")
-        if sub_action == "➕ เพิ่มตัวละครเสริม":
-            with st.form("add_sub", clear_on_submit=True):
-                s_name = st.text_input("ชื่อตัวละครเสริม:")
-                s_p = st.text_area("คาแรคเตอร์:")
-                s_pers = st.text_area("บุคลิก:")
-                s_l = st.text_area("เรื่องราว:")
-                if st.form_submit_button("➕ บันทึก", use_container_width=True) and s_name:
-                    cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)", (active_char, s_name, s_p, s_pers, s_l))
+    elif sidebar_action == "🗑️ ลบตัวละครหลัก":
+        st.markdown("### 🗑️ ลบตัวละครหลัก")
+        if user_chars:
+            del_target = st.selectbox("เลือกตัวละครที่ต้องการลบ:", user_chars, key="del_target_sel")
+            if st.button("🗑️ ยืนยันการลบตัวละครนี้", use_container_width=True):
+                cursor.execute("DELETE FROM characters WHERE name = ?", (del_target,))
+                cursor.execute("DELETE FROM supporting_characters WHERE char_name = ?", (del_target,))
+                cursor.execute("DELETE FROM character_status WHERE char_name = ?", (del_target,))
+                cursor.execute("DELETE FROM quests WHERE char_name = ?", (del_target,))
+                cursor.execute("DELETE FROM character_photos WHERE char_name = ?", (del_target,))
+                cursor.execute("DELETE FROM messages WHERE char_name = ?", (del_target,))
+                conn.commit()
+                st.success(f"ลบตัวละคร '{del_target}' เรียบร้อยแล้ว!")
+                st.session_state.current_char = None
+                st.session_state.in_chat = False
+                st.rerun()
+        else:
+            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของให้ลบ")
+
+    elif sidebar_action == "👥 จัดการตัวละครเสริม":
+        st.markdown("### 👥 จัดการตัวละครเสริม")
+        if user_chars:
+            sub_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="sub_char_sel")
+            sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "🗑️ ลบตัวละครเสริม"], key="sub_rad")
+            
+            if sub_action == "➕ เพิ่มตัวละครเสริม":
+                with st.form("add_sub_form", clear_on_submit=True):
+                    s_name = st.text_input("ชื่อตัวละครเสริม:")
+                    s_p = st.text_area("คาแรคเตอร์:")
+                    s_pers = st.text_area("บุคลิก:")
+                    s_l = st.text_area("เรื่องราว:")
+                    if st.form_submit_button("➕ บันทึกตัวเสริม", use_container_width=True) and s_name:
+                        cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)", (sub_target_char, s_name, s_p, s_pers, s_l))
+                        conn.commit()
+                        st.success("เพิ่มตัวละครเสริมสำเร็จ!")
+                        st.rerun()
+            else:
+                cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = ?", (sub_target_char,))
+                sub_list = cursor.fetchall()
+                if sub_list:
+                    sub_dict = {s[1]: s[0] for s in sub_list}
+                    sel_sub_name = st.selectbox("เลือกตัวเสริมที่ต้องการลบ:", list(sub_dict.keys()))
+                    if st.button("🗑️ ยืนยันลบตัวเสริมนี้", use_container_width=True):
+                        cursor.execute("DELETE FROM supporting_characters WHERE id = ?", (sub_dict[sel_sub_name],))
+                        conn.commit()
+                        st.success("ลบตัวละครเสริมสำเร็จ!")
+                        st.rerun()
+                else:
+                    st.info("ยังไม่มีตัวละครเสริมในตัวละครนี้")
+        else:
+            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+
+    elif sidebar_action == "🎯 จัดการภารกิจ (Quest Log)":
+        st.markdown("### 🎯 จัดการภารกิจ (Quest Log)")
+        if user_chars:
+            q_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="q_char_sel")
+            with st.form("add_q_form", clear_on_submit=True):
+                q_desc = st.text_input("รายละเอียดภารกิจใหม่:")
+                q_pts = st.slider("คะแนนรางวัล:", 5, 100, 15)
+                if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and q_desc:
+                    cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (q_target_char, q_desc, q_pts))
                     conn.commit()
-                    st.success("บันทึกสำเร็จ!")
+                    st.success("เพิ่มภารกิจสำเร็จ!")
                     st.rerun()
         else:
-            cursor.execute("SELECT id, sub_name, sub_prompt, sub_personality, sub_lore, sub_avatar FROM supporting_characters WHERE char_name = ?", (active_char,))
-            sub_list = cursor.fetchall()
-            if sub_list:
-                sub_dict = {s[1]: s[0] for s in sub_list}
-                sel_sub_name = st.selectbox("เลือกตัวละครเสริม:", list(sub_dict.keys()))
-                sel_id = sub_dict[sel_sub_name]
-                s_info = next(s for s in sub_list if s[0] == sel_id)
-                if st.button(f"⭐ เลื่อนขั้น '{s_info[1]}' ขึ้นเป็นตัวละครหลัก", use_container_width=True):
-                    cursor.execute("INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)", (s_info[1], s_info[2], s_info[3], s_info[4], json.dumps([f"*หันมามองคุณ* \"มีอะไรเหรอ?\""], ensure_ascii=False), s_info[5]))
-                    cursor.execute("DELETE FROM supporting_characters WHERE id = ?", (sel_id,))
+            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+
+    elif sidebar_action == "🖼️ จัดการคลังรูปภาพ":
+        st.markdown("### 🖼️ จัดการคลังรูปภาพ")
+        if user_chars:
+            img_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="img_char_sel")
+            with st.form(f"upload_photo_form_{img_target_char}", clear_on_submit=True):
+                new_photos = st.file_uploader("อัปโหลดรูปภาพเข้าคลัง:", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
+                if st.form_submit_button("📥 บันทึกรูปลงคลัง", use_container_width=True) and new_photos:
+                    for photo_file in new_photos:
+                        p_bytes = photo_file.getvalue()
+                        p_hash = hashlib.md5(p_bytes).hexdigest()
+                        cursor.execute("INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)", (img_target_char, p_bytes, p_hash))
                     conn.commit()
-                    st.session_state.current_char = s_info[1]
-                    st.session_state.in_chat = True
-                    st.success("เลื่อนขั้นสำเร็จ!")
+                    st.success("อัปโหลดรูปภาพสำเร็จ!")
                     st.rerun()
+
+            cursor.execute("SELECT id, photo FROM character_photos WHERE char_name = ?", (img_target_char,))
+            photos_in_db = cursor.fetchall()
+            if photos_in_db:
+                cols_img = st.columns(3)
+                for idx, (p_id, p_blob) in enumerate(photos_in_db):
+                    with cols_img[idx % 3]:
+                        with st.container(border=True):
+                            st.image(Image.open(io.BytesIO(p_blob)), use_container_width=True)
+                            if st.button("🗑️ ลบรูปนี้", key=f"del_photo_{p_id}", use_container_width=True):
+                                cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
+                                conn.commit()
+                                st.rerun()
+        else:
+            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+
+    elif sidebar_action == "👥 จัดการผู้ใช้งานระบบ" and is_admin:
+        st.markdown("### 👥 รายชื่อผู้ใช้งานทั้งหมด")
+        cursor.execute("SELECT username, is_admin FROM users")
+        for u, adm in cursor.fetchall():
+            st.markdown(f"- `{u}` ({'Admin' if adm else 'User'})")
