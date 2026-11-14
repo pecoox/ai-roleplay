@@ -36,9 +36,16 @@ def init_db():
             personality TEXT,
             lore TEXT,
             first_message TEXT,
-            avatar BLOB
+            avatar BLOB,
+            creator TEXT DEFAULT 'admin'
         )
     """)
+    
+    # ตรวจสอบคอลัมน์ creator ในกรณีที่ฐานข้อมูลเดิมยังไม่มี
+    cursor.execute("PRAGMA table_info(characters)")
+    c_cols = [col[1] for col in cursor.fetchall()]
+    if "creator" not in c_cols:
+        cursor.execute("ALTER TABLE characters ADD COLUMN creator TEXT DEFAULT 'admin'")
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
