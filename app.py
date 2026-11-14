@@ -59,7 +59,7 @@ st.markdown(
 )
 
 
-# 🗄️ ฟังก์ชันฐานข้อมูล SQLite พร้อมตารางความทรงจำระยะยาว (Novel Memory)
+# 🗄️ ฟังก์ชันฐานข้อมูล SQLite
 def init_db():
   conn = sqlite3.connect("roleplay_data.db", check_same_thread=False)
   cursor = conn.cursor()
@@ -128,7 +128,6 @@ def init_db():
         )
     """)
 
-  # 🧠 ตารางความทรงจำระยะยาวสำหรับเก็บบันทึกเหตุการณ์สำคัญ (Long-term Memory)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS novel_memories (
             username TEXT,
@@ -207,7 +206,6 @@ def hash_password(password):
   return hashlib.sha256(password.encode()).hexdigest()
 
 
-# 📈 ฟังก์ชันคำนวณระดับความสัมพันธ์ เปลี่ยนทุกๆ 100 คะแนนเป๊ะๆ
 def get_relationship_level(score):
   levels = [
       (0, "คนแปลกหน้า"),
@@ -1050,7 +1048,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ห้องแชท (พร้อมระบบความทรงจำระยะยาว)
+# 💬 ห้องแชท (พร้อมระบบ AI Game Master / กรรมการตรวจบทบาทสำหรับ Admin)
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -1094,7 +1092,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
   )
 
-  # 🧠 ดึงความทรงจำระยะยาว (Long-term Memory) ของคู่นี้ขึ้นมาประกอบบริบท
   cursor.execute(
       "SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?",
       (current_user, st.session_state.current_char),
@@ -1106,7 +1103,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       else "ยังไม่มีเหตุการณ์สำคัญสะสม เริ่มต้นเรื่องราวใหม่"
   )
 
-  # 🧠 คำสั่งระบบ Roleplay แบบอัปเกรดด้วยแนวคิดนิยายยาว (Long-form Context & Memory)
   roleplay_instruction = f"""
 คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพ และผู้สวมบทบาทตัวละคร '{st.session_state.current_char}'
 - ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
@@ -1120,11 +1116,6 @@ if st.session_state.in_chat and st.session_state.current_char:
 [ผู้สนทนา]: ชื่อ {u_name} | ประวัติ: {u_persona} | สรรพนามพูด: {u_pspeak} | สรรพนามบรรยาย: {u_pdesc} | เรียกผู้ใช้: {u_cspeak}
 - ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
-[กฎพฤติกรรมตามระดับความสัมพันธ์]:
-- หากแต้มความชอบต่ำ (0-100): ตัวละครระแวง เย็นชา หรือวางตัวตามคาแรคเตอร์ดั้งเดิม
-- หากแต้มความชอบปานกลาง (200-400): เริ่มเปิดใจ เป็นกันเอง และห่วงใย
-- หากแต้มความชอบสูงมาก (500 ขึ้นไป / โซลเมท / 1000+): เปลี่ยนเป็นคนคลั่งรัก อ่อนโยนเป็นพิเศษ เปิดเผยความรู้สึกในใจ ลึกซึ้ง และปฏิบัติกับผู้ใช้เสมือนคนสำคัญที่สุดในชีวิต
-
 [กฎการเขียนบทบาทและการจัดหน้า]:
 1. **จัดย่อหน้าและเว้นบรรทัดให้อ่านง่าย**: ห้ามเขียนเป็นพารากราฟยาวติดกัน ให้เคาะขึ้นบรรทัดใหม่แบ่งฉาก ท่าทาง หรือบทพูดอย่างชัดเจน
 2. **รูปแบบสัดส่วน**: 
@@ -1132,7 +1123,7 @@ if st.session_state.in_chat and st.session_state.current_char:
    - บทพูด ให้ใช้เครื่องหมายคำพูดปกติ "{st.session_state.current_char}: \"...\""
 3. **การมีส่วนร่วมของตัวละครเสริม**: ดึงตัวละครเสริมรอบตัวเข้ามาสร้างสีสันในฉากตามความเหมาะสม
 4. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
-{{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจ หรือ null], "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค เพื่ออัปเดตความทรงจำระยะยาว]"}}
+{{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจ หรือ null], "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค]"}}
 """
 
 
@@ -1180,7 +1171,7 @@ if st.session_state.in_chat and st.session_state.current_char:
       for r in cursor.fetchall()
   ]
 
-  col_av, col_title, col_reset = st.columns([1, 6, 2])
+  col_av, col_title, col_reset = st.columns([1, 5, 2])
   with col_av:
     if char_avatar_img:
       st.image(char_avatar_img, width=60)
@@ -1206,6 +1197,43 @@ if st.session_state.in_chat and st.session_state.current_char:
       )
       conn.commit()
       st.rerun()
+
+  # 🛠️ [Admin Feature] ปุ่มเรียก AI กรรมการตรวจบทบาท (Game Master Audit)
+  if is_current_admin:
+    with st.expander(
+        "🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาท (Game Master Audit)"
+    ):
+      st.caption(
+          "กดปุ่มด้านล่างเพื่อให้ AI กรรมการตรวจสอบบทสนทนาล่าสุดของตัวละครว่าเข้าบทบาท"
+          " มีความเป็นธรรมชาติ และตรงตาม Prompt แค่ไหน"
+      )
+      if st.button(
+          "🧪 รัน AI กรรมการตรวจบทบาทตอนนี้", use_container_width=True
+      ):
+        with st.spinner("AI กรรมการกำลังวิเคราะห์บทสนทนาและพฤติกรรมตัวละคร..."):
+          try:
+            # ดึงประวัติแชทล่าสุดมาให้กรรมการตรวจ
+            recent_chat_log = "\n".join(
+                [f"{m['role']}: {m['content']}" for m in current_messages[-6:]]
+            )
+            audit_prompt = (
+                f"คุณคือ AI Game Master หรือกรรมการผู้เชี่ยวชาญการประเมินการสวมบทบาท (Roleplay Audit)\n"
+                f"ข้อมูลตัวละครหลัก '{st.session_state.current_char}':\n"
+                f"- คาแรคเตอร์: {base_prompt}\n"
+                f"- บุคลิก: {char_personality}\n\n"
+                f"บทสนทนาล่าสุด 6 ข้อความ:\n{recent_chat_log}\n\n"
+                f"กรุณาวิเคราะห์และประเมินในรูปแบบรายงานสั้นๆ (ภาษาไทย) ดังนี้:\n"
+                f"1. **คะแนนความเข้าบทบาท (0-10):** [ใส่คะแนน]\n"
+                f"2. **การวิเคราะห์ความธรรมชาติ & คาแรคเตอร์:** [อธิบายว่าตัวละครเล่นได้ตรงคาแรคเตอร์ไหม มีจุดไหนแข็งทื่อหรือหลุดไหม]\n"
+                f"3. **ข้อเสนอแนะในการปรับปรุง Prompt:** [แนะนำวิธีแก้หรือเพิ่มกฎใน Prompt เพื่อให้ตัวละครสมจริงขึ้น]"
+            )
+            audit_res = client.models.generate_content(
+                model=model_name, contents=audit_prompt
+            )
+            st.markdown("### 📊 ผลการประเมินจาก AI กรรมการ:")
+            st.info(audit_res.text)
+          except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการตรวจสอบ: {e}")
 
   st.divider()
 
@@ -1294,7 +1322,7 @@ if st.session_state.in_chat and st.session_state.current_char:
         )
         q_data = cursor.fetchone()
         if q_data:
-          bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
+          bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไปครัว {q_data[1]} แต้ม)*"
         else:
           bot_response = (
               f"*(สังเกตการณ์ระบบ: ไม่พบภารกิจหมายเลข #{completed_q_id})*"
@@ -1388,7 +1416,6 @@ if st.session_state.in_chat and st.session_state.current_char:
         completed_q_id = eval_data.get("quest_update", completed_q_id)
         new_mem_snippet = eval_data.get("memory_update", None)
 
-        # บันทึกอัปเดตความทรงจำระยะยาว
         if new_mem_snippet:
           updated_memory_vault = (
               f"{long_term_memory} -> {new_mem_snippet}"
