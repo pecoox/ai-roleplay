@@ -12,15 +12,9 @@ st.set_page_config(page_title="AI Roleplay - Novel Universe Hub", page_icon="�
 
 st.markdown("""
     <style>
-    .stChatMessage { border-radius: 16px !important; padding: 12px 16px !important; margin-bottom: 12px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid rgba(255,255,255,0.08); }
+    .stChatMessage { border-radius: 18px !important; padding: 16px 20px !important; margin-bottom: 14px !important; box-shadow: 0 3px 10px rgba(0,0,0,0.07); border: 1px solid rgba(255,255,255,0.08); }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .stChatMessage p { line-height: 1.6 !important; margin-bottom: 8px !important; word-break: break-word; }
-    /* ปรับแต่งให้มือถือใช้งานง่ายขึ้น */
-    @media (max-width: 768px) {
-        .block-container { padding-top: 1rem !important; padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
-        h1 { font-size: 1.5rem !important; }
-        h3 { font-size: 1.2rem !important; }
-    }
+    .stChatMessage p { line-height: 1.65 !important; margin-bottom: 10px !important; word-break: break-word; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -64,7 +58,7 @@ if "in_chat" not in st.session_state: st.session_state.in_chat = False
 
 # 🔐 หน้าจอ Login
 if not st.session_state.logged_in:
-    st.title("🌌 AI Roleplay Hub")
+    st.title("🌌 AI Roleplay - Novel Universe Hub")
     tab1, tab2 = st.tabs(["🔑 เข้าสู่ระบบ", "📝 สมัครสมาชิก"])
     with tab1:
         with st.form("login_form"):
@@ -144,38 +138,38 @@ with st.sidebar:
 
 # 🏠 หน้าแรก
 if not st.session_state.in_chat:
-    st.title("🔥 จักรวาลตัวละครทั้งหมด")
+    st.title("🔥 จักรวาลยอดนิยม & ตัวละครทั้งหมด")
     st.divider()
     if not all_chars:
         st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักผ่านเมนูด้านข้าง")
     else:
-        # ปรับให้แสดงผลสวยงามทั้งบนมือถือและคอมพิวเตอร์
-        cols = st.columns(2 if st.get_option("client.showSidebarNavigation") else 3)
+        # จัดคอลัมน์ให้แสดงผลสวยงาม 3 คอลัมน์มาตรฐานบนคอมพิวเตอร์
+        cols = st.columns(3)
         for idx, c_name in enumerate(all_chars):
             cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?", (c_name,))
             c_data = cursor.fetchone()
             c_prompt, c_pers, c_lore, c_avatar_blob = c_data[0], c_data[1], c_data[2], c_data[3]
             
-            with st.container(border=True):
-                if c_avatar_blob:
-                    st.image(Image.open(io.BytesIO(c_avatar_blob)), use_container_width=True)
-                else:
-                    st.image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", use_container_width=True)
-                st.markdown(f"### 🌟 {c_name}")
-                
-                # ปุ่มดูข้อมูลและปุ่มแชทขนาดพอดีมือถือ
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    with st.popover("📋 ข้อมูล", use_container_width=True):
-                        st.markdown(f"### 🌟 {c_name}")
-                        st.markdown(f"**🎭 คาแรคเตอร์:**\n{c_prompt}")
-                        st.markdown(f"**🧠 บุคลิก:**\n{c_pers}")
-                        st.markdown(f"**📜 เรื่องราว:**\n{c_lore}")
-                with btn_col2:
-                    if st.button("✨ แชท", key=f"b_{c_name}", use_container_width=True):
-                        st.session_state.current_char = c_name
-                        st.session_state.in_chat = True
-                        st.rerun()
+            with cols[idx % 3]:
+                with st.container(border=True):
+                    if c_avatar_blob:
+                        st.image(Image.open(io.BytesIO(c_avatar_blob)), use_container_width=True)
+                    else:
+                        st.image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", use_container_width=True)
+                    st.markdown(f"### 🌟 {c_name}")
+                    
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        with st.popover("📋 ข้อมูล", use_container_width=True):
+                            st.markdown(f"### 🌟 {c_name}")
+                            st.markdown(f"**🎭 คาแรคเตอร์:**\n{c_prompt}")
+                            st.markdown(f"**🧠 บุคลิก:**\n{c_pers}")
+                            st.markdown(f"**📜 เรื่องราว:**\n{c_lore}")
+                    with btn_col2:
+                        if st.button("✨ แชท", key=f"b_{c_name}", use_container_width=True):
+                            st.session_state.current_char = c_name
+                            st.session_state.in_chat = True
+                            st.rerun()
     st.stop()
 
 # 💬 ห้องแชท
@@ -218,25 +212,24 @@ if st.session_state.in_chat and st.session_state.current_char:
     cursor.execute("SELECT role, content, image_blob FROM (SELECT role, content, image_blob, id FROM messages WHERE username = ? AND char_name = ? ORDER BY id DESC LIMIT 15) ORDER BY id ASC", (current_user, st.session_state.current_char))
     current_messages = [{"role": r[0], "content": r[1], "image": Image.open(io.BytesIO(r[2])) if r[2] else None} for r in cursor.fetchall()]
 
-    # ส่วนหัวห้องแชทปรับให้กระชับบนมือถือ
     col_av, col_title, col_reset = st.columns([1, 4, 3])
     with col_av:
-        if char_avatar_img: st.image(char_avatar_img, width=40)
-        else: st.image("https://api.iconify.design/lucide:user-round.svg", width=40)
+        if char_avatar_img: st.image(char_avatar_img, width=50)
+        else: st.image("https://api.iconify.design/lucide:user-round.svg", width=50)
     with col_title:
-        st.markdown(f"#### `{st.session_state.current_char}`")
+        st.markdown(f"### แชทกับ: `{st.session_state.current_char}`")
     with col_reset:
         col_r1, col_r2 = st.columns(2)
         with col_r1:
-            if st.button("🔄", help="รีเซ็ตแชท", use_container_width=True):
+            if st.button("🔄 รีเซ็ต", use_container_width=True):
                 cursor.execute("DELETE FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
                 cursor.execute("UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
                 conn.commit()
                 st.rerun()
         with col_r2:
-            with st.popover("📖", help="เมนูลับ", use_container_width=True):
+            with st.popover("📖 เมนู", use_container_width=True):
                 if st.button("📖 แปลงแชทเป็นนิยาย", use_container_width=True):
-                    with st.spinner("กำลังแปลง..."):
+                    with st.spinner("กำลังแปลงแชทเป็นตอนนิยาย..."):
                         chat_log_text = "\n".join([f"{m['role']}: {m['content']}" for m in current_messages])
                         novel_res = client.models.generate_content(model=model_name, contents=f"จงแปลงบทสนทนานี้เป็นตอนนิยายบรรยาย:\n{chat_log_text}")
                         st.markdown("### 📜 ตอนนิยายของคุณ:")
@@ -247,10 +240,9 @@ if st.session_state.in_chat and st.session_state.current_char:
     for message in current_messages:
         with st.chat_message("user" if message["role"] == "user" else "assistant", avatar="👤" if message["role"] == "user" else (char_avatar_img or "✨")):
             st.markdown(message["content"])
-            if message["image"]: st.image(message["image"], width=240)
+            if message["image"]: st.image(message["image"], width=280)
 
-    # ช่องพิมพ์ข้อความแชท รองรับมือถือเต็มรูปแบบ
-    if user_input := st.chat_input(f"พิมพ์ข้อความหา {st.session_state.current_char}..."):
+    if user_input := st.chat_input(f"ส่งข้อความหา {st.session_state.current_char}..."):
         cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'user', ?)", (current_user, st.session_state.current_char, user_input))
         conn.commit()
         
@@ -260,14 +252,14 @@ if st.session_state.in_chat and st.session_state.current_char:
                 raw_t = response.text
                 clean_t = raw_t.split("{")[0].strip() if "{" in raw_t else raw_t.strip()
             except Exception as e:
-                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่ายมือถือ กรุณาลองส่งใหม่อีกครั้ง*"
+                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหม่อีกครั้ง*"
 
             attached_photo_bytes = None
             cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
             photos = cursor.fetchall()
             if photos and random.random() < 0.30:
                 attached_photo_bytes = random.choice(photos)[0]
-                st.image(Image.open(io.BytesIO(attached_photo_bytes)), width=240)
+                st.image(Image.open(io.BytesIO(attached_photo_bytes)), width=280)
 
             st.markdown(clean_t)
             cursor.execute("INSERT INTO messages (username, char_name, role, content, image_blob) VALUES (?, ?, 'assistant', ?, ?)", (current_user, st.session_state.current_char, clean_t, attached_photo_bytes))
