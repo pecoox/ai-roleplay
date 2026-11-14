@@ -102,8 +102,15 @@ with st.sidebar:
 
     sidebar_action = render_admin_sidebar(cursor, conn, all_chars, st.session_state.current_char, is_current_admin, current_user)
 
-    if all_chars and sidebar_action not in ["✨ สร้างตัวละครหลักด้วย AI (พรีเมียมขั้นสูง)", "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)", "➕ สร้างตัวละครหลักใหม่ (Manual)"]:
-        selected_char = st.selectbox("เลือกตัวละครหลัก:", all_chars, index=all_chars.index(st.session_state.current_char) if st.session_state.current_char in all_chars else 0)
+    # กรองการแสดงผลตัวละครใน Sidebar ตามสิทธิ์ (Admin เห็นทั้งหมด, User เห็นเฉพาะที่ตัวเองสร้าง)
+    if is_current_admin:
+        manageable_chars = all_chars
+    else:
+        cursor.execute("SELECT name FROM characters WHERE creator = ?", (current_user,))
+        manageable_chars = [row[0] for row in cursor.fetchall()]
+
+    if manageable_chars and sidebar_action not in ["✨ สร้างตัวละครหลักด้วย AI (พรีเมียมขั้นสูง)", "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)", "➕ สร้างตัวละครหลักใหม่ (Manual)"]:
+        selected_char = st.selectbox("เลือกตัวละครของฉัน:", manageable_chars, index=manageable_chars.index(st.session_state.current_char) if st.session_state.current_char in manageable_chars else 0)
         if selected_char != st.session_state.current_char:
             st.session_state.current_char = selected_char
             st.rerun()
