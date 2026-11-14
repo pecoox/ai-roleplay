@@ -5,17 +5,17 @@ import io
 import random
 import json
 from database import init_db, hash_password, get_relationship_level
-from ai_engine import run_with_timer
-from admin_panel import render_admin_sidebar, handle_admin_actions
+from admin_panel import render_admin_sidebar, handle_admin_actions, run_with_timer
 
 st.set_page_config(page_title="AI Roleplay - Novel Universe Hub", page_icon="🌌", layout="wide")
 
 st.markdown("""
     <style>
-    .stChatMessage { border-radius: 18px !important; padding: 16px 20px !important; margin-bottom: 14px !important; box-shadow: 0 3px 10px rgba(0,0,0,0.07); border: 1px solid rgba(255,255,255,0.08); }
+    .stChatMessage { border-radius: 20px !important; padding: 18px 22px !important; margin-bottom: 16px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid rgba(255,255,255,0.1); }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .stChatMessage p { line-height: 1.65 !important; margin-bottom: 10px !important; word-break: break-word; }
-    .affection-badge { display: inline-block; background: linear-gradient(135deg, rgba(255,105,180,0.2), rgba(138,43,226,0.2)); border: 1px solid rgba(255,105,180,0.4); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #ff99cc; font-weight: bold; margin-bottom: 10px; }
+    .affection-badge { display: inline-block; background: linear-gradient(135deg, rgba(255,105,180,0.2), rgba(138,43,226,0.2)); border: 1px solid rgba(255,105,180,0.4); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #ff99cc; font-weight: bold; }
+    .stChatMessage p em, .stChatMessage em { color: #94a3b8 !important; font-style: normal !important; }
+    .stChatMessage p { line-height: 1.7 !important; margin-bottom: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,11 +94,12 @@ if not st.session_state.logged_in:
     st.stop()
 
 current_user = st.session_state.username
+if current_user.lower() == "admin": st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
 
-cursor.execute("SELECT user_name, user_persona FROM users WHERE username = ?", (current_user,))
-u_row = cursor.fetchone()
-u_name, u_persona = (u_row[0], u_row[1]) if u_row else (current_user, "")
+cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
+p_row = cursor.fetchone()
+u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
 
 cursor.execute("SELECT name FROM characters")
 all_chars = [row[0] for row in cursor.fetchall()]
@@ -128,8 +129,8 @@ with st.sidebar:
         cursor.execute("SELECT name FROM characters WHERE creator = ?", (current_user,))
         manageable_chars = [row[0] for row in cursor.fetchall()]
 
-    if manageable_chars and sidebar_action not in ["✨ สร้างตัวละครหลักด้วย AI (พรีเมียมขั้นสูง)", "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)", "➕ สร้างตัวละครหลักใหม่ (Manual)"]:
-        selected_char = st.selectbox("เลือกตัวละครของฉัน:", manageable_chars, index=manageable_chars.index(st.session_state.current_char) if st.session_state.current_char in manageable_chars else 0)
+    if manageable_chars and sidebar_action not in ["✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)", "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)"]:
+        selected_char = st.selectbox("เลือกตัวละครหลัก:", manageable_chars, index=manageable_chars.index(st.session_state.current_char) if st.session_state.current_char in manageable_chars else 0)
         if selected_char != st.session_state.current_char:
             st.session_state.current_char = selected_char
             st.rerun()
@@ -148,10 +149,7 @@ if not st.session_state.in_chat:
         for idx, c_name in enumerate(all_chars):
             cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?", (c_name,))
             c_data = cursor.fetchone()
-            if c_data:
-                c_prompt, c_pers, c_lore, c_avatar_blob = c_data[0], c_data[1], c_data[2], c_data[3]
-            else:
-                c_prompt, c_pers, c_lore, c_avatar_blob = "", "", "", None
+            c_prompt, c_pers, c_lore, c_avatar_blob = (c_data[0], c_data[1], c_data[2], c_data[3]) if c_data else ("", "", "", None)
             
             with cols[idx % 3]:
                 with st.container(border=True):
@@ -179,12 +177,9 @@ if not st.session_state.in_chat:
 if st.session_state.in_chat and st.session_state.current_char:
     cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?", (st.session_state.current_char,))
     char_data = cursor.fetchone()
-    if char_data:
-        base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = (
-            char_data[0], char_data[1], char_data[2], char_data[3], Image.open(io.BytesIO(char_data[4])) if char_data[4] else None
-        )
-    else:
-        base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = "", "", "", "", None
+    base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = (
+        (char_data[0], char_data[1], char_data[2], char_data[3], Image.open(io.BytesIO(char_data[4]))) if (char_data and char_data[4]) else (char_data[0], char_data[1], char_data[2], char_data[3], None)
+    )
 
     cursor.execute("SELECT sub_name, sub_prompt, sub_personality FROM supporting_characters WHERE char_name = ?", (st.session_state.current_char,))
     supporting_text = ", ".join([f"{s[0]} ({s[1]})" for s in cursor.fetchall()]) or "ไม่มี"
@@ -194,7 +189,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     
     cursor.execute("SELECT affection_score, relationship_level FROM character_status WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     status_row = cursor.fetchone()
-    current_affection, current_rel_level = (status_row[0], status_row[1]) if status_row else (0, 'คนแปลกหน้า')
+    current_affection, current_rel_level = (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
 
     cursor.execute("SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     mem_row = cursor.fetchone()
@@ -212,9 +207,17 @@ if st.session_state.in_chat and st.session_state.current_char:
 {{"score_change": 2, "quest_update": null, "memory_update": "[สรุปสั้นๆ]"}}
 """
 
+    def get_random_first_msg(raw_json):
+        try:
+            msgs = json.loads(raw_json)
+            if msgs: return random.choice(msgs)
+        except: pass
+        return "*ปรายตามองคุณ* \"มีธุระอะไร?\""
+
     cursor.execute("SELECT COUNT(*) FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'assistant', ?)", (current_user, st.session_state.current_char, "*ปรายตามองคุณ* \"มีธุระอะไร?\""))
+        init_msg = get_random_first_msg(char_first_msg_raw)
+        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'assistant', ?)", (current_user, st.session_state.current_char, init_msg))
         conn.commit()
 
     cursor.execute("SELECT role, content, image_blob FROM (SELECT role, content, image_blob, id FROM messages WHERE username = ? AND char_name = ? ORDER BY id DESC LIMIT 15) ORDER BY id ASC", (current_user, st.session_state.current_char))
@@ -232,6 +235,7 @@ if st.session_state.in_chat and st.session_state.current_char:
             if st.button("🔄 รีเซ็ต", use_container_width=True):
                 cursor.execute("DELETE FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
                 cursor.execute("UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
+                cursor.execute("DELETE FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
                 conn.commit()
                 st.rerun()
         with col_r2:
@@ -243,17 +247,18 @@ if st.session_state.in_chat and st.session_state.current_char:
                         st.markdown("### 📜 ตอนนิยายของคุณ:")
                         st.write(novel_res.text)
 
-    # 💖 แสดงแถบค่าความสนิทและสถานะความสัมพันธ์
     st.markdown(f'<div class="affection-badge">💖 ความสัมพันธ์: {current_rel_level} | แต้มความสนิท: {current_affection} คะแนน</div>', unsafe_allow_html=True)
 
-    # 🎯 แสดงรายการภารกิจ (Quest Log)
     with st.expander("🎯 ภารกิจปัจจุบัน (Quest Log)"):
-        cursor.execute("SELECT id, task_desc, reward_points, is_completed FROM quests WHERE char_name = ?", (st.session_state.current_char,))
+        cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?", (st.session_state.current_char,))
         quests = cursor.fetchall()
         if quests:
-            for q_id, q_desc, q_pts, q_done in quests:
-                status_icon = "✅" if q_done else "⏳"
-                st.markdown(f"- {status_icon} **{q_desc}** *(รางวัล: {q_pts} แต้ม)*")
+            for q_id, q_desc, q_pts in quests:
+                cursor.execute("SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?", (current_user, q_id))
+                uq = cursor.fetchone()
+                is_comp = uq[0] if uq else 0
+                status_icon = "✅" if is_comp else "⏳"
+                st.markdown(f"- {status_icon} **[#{q_id}] {q_desc}** *(รางวัล: {q_pts} แต้ม)*")
         else:
             st.info("ยังไม่มีภารกิจสำหรับตัวละครนี้")
 
@@ -273,30 +278,33 @@ if st.session_state.in_chat and st.session_state.current_char:
                 response = client.chats.create(model=model_name, config={"system_instruction": roleplay_instruction}).send_message(user_input)
                 raw_t = response.text
                 
-                # แยกข้อความแชทกับ JSON สเตตัสที่ AI ส่งกลับมา
                 if "{" in raw_t and "}" in raw_t:
                     clean_t = raw_t[:raw_t.find("{")].strip()
                     json_str = raw_t[raw_t.find("{"):raw_t.rfind("}")+1]
                     try:
                         ai_data = json.loads(json_str)
-                        score_change = ai_data.get("score_change", 1)
+                        score_change = ai_data.get("score_change", 2)
+                        completed_q_id = ai_data.get("quest_update", None)
                         memory_update = ai_data.get("memory_update", "")
                         
-                        # อัปเดตแต้มความสนิท
                         new_score = current_affection + score_change
                         new_level = get_relationship_level(new_score)
                         cursor.execute("UPDATE character_status SET affection_score = ?, relationship_level = ? WHERE username = ? AND char_name = ?", (new_score, new_level, current_user, st.session_state.current_char))
                         
-                        # อัปเดตความทรงจำระยะยาว
                         if memory_update:
-                            cursor.execute("INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)", (current_user, st.session_state.current_char, memory_update))
+                            updated_memory_vault = f"{long_term_memory} -> {memory_update}" if long_term_memory != "ยังไม่มีเหตุการณ์สำคัญสะสม" else memory_update
+                            cursor.execute("INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)", (current_user, st.session_state.current_char, updated_memory_vault))
+                        
+                        if completed_q_id:
+                            cursor.execute("INSERT OR REPLACE INTO user_quests (username, quest_id, is_completed) VALUES (?, ?, 1)", (current_user, completed_q_id))
+                        
                         conn.commit()
                     except:
-                        pass
+                        clean_t = raw_t.strip()
                 else:
                     clean_t = raw_t.strip()
             except Exception as e:
-                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหมอีกครั้ง*"
+                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหม่อีกครั้ง*"
 
             attached_photo_bytes = None
             cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
