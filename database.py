@@ -21,20 +21,13 @@ def init_db():
 
     cursor.execute("PRAGMA table_info(users)")
     columns = [col[1] for col in cursor.fetchall()]
-    if "is_admin" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
-    if "user_name" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''")
-    if "user_persona" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN user_persona TEXT DEFAULT ''")
-    if "pronoun_speak" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN pronoun_speak TEXT DEFAULT ''")
-    if "pronoun_desc" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN pronoun_desc TEXT DEFAULT ''")
-    if "call_speak" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN call_speak TEXT DEFAULT ''")
-    if "call_desc" not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
+    if "is_admin" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+    if "user_name" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''")
+    if "user_persona" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN user_persona TEXT DEFAULT ''")
+    if "pronoun_speak" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN pronoun_speak TEXT DEFAULT ''")
+    if "pronoun_desc" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN pronoun_desc TEXT DEFAULT ''")
+    if "call_speak" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_speak TEXT DEFAULT ''")
+    if "call_desc" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
