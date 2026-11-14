@@ -17,7 +17,8 @@ def render_admin_sidebar(cursor, conn, all_chars, current_char, is_admin, curren
             "👥 จัดการตัวละครเสริม",
             "🎯 จัดการภารกิจ (Quests)",
             "🖼️ จัดการคลังรูปภาพตัวละคร",
-            "🔍 ตรวจสอบสถานะฐานข้อมูล"
+            "🔍 ตรวจสอบสถานะฐานข้อมูล",
+            "💾 สำรองและกู้คืนข้อมูลระบบ"
         ])
     else:
         actions.extend([
@@ -55,6 +56,91 @@ def handle_admin_actions(action, cursor, conn, all_chars, active_char, client, m
             col3.metric("💬 ข้อความในแชทสะสม", f"{m_count} ข้อความ")
         else:
             st.error(f"🔴 ขัดข้องในการเชื่อมต่อฐานข้อมูล: {db_info}")
+        return
+
+    # 💾 สำรองและกู้คืนข้อมูลระบบ
+    if action == "💾 สำรองและกู้คืนข้อมูลระบบ":
+        st.title("💾 ระบบสำรองและกู้คืนข้อมูล (Backup & Restore)")
+        st.divider()
+        
+        tab_backup, tab_restore = st.tabs(["📤 ส่งออกข้อมูลสำรอง (Backup)", "📥 กู้คืนข้อมูล (Restore)"])
+        
+        with tab_backup:
+            st.markdown("### ดาวน์โหลดไฟล์สำรองข้อมูลทั้งหมดในระบบ (JSON)")
+            if st.button("📥 สร้างและดาวน์โหลดไฟล์ Backup", use_container_width=True):
+                try:
+                    cursor.execute("SELECT username, password, is_admin, user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users;")
+                    users_data = cursor.fetchall()
+                    
+                    cursor.execute("SELECT name, prompt, personality, lore, first_message, creator FROM characters;")
+                    chars_data = cursor.fetchall()
+                    
+                    cursor.execute("SELECT char_name, sub_name, sub_prompt, sub_personality, sub_lore FROM supporting_characters;")
+                    subs_data = cursor.fetchall()
+                    
+                    cursor.execute("SELECT char_name, task_desc, reward_points FROM quests;")
+                    quests_data = cursor.fetchall()
+
+                    backup_dict = {
+                        "users": users_data,
+                        "characters": chars_data,
+                        "supporting_characters": subs_data,
+                        "quests": quests_data
+                    }
+                    
+                    json_str = json.dumps(backup_dict, ensure_ascii=False, indent=4)
+                    st.download_button(
+                        label="💾 คลิกเพื่อบันทึกไฟล์ลงเครื่อง (.json)",
+                        data=json_str,
+                        file_name="universe_hub_backup.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการสร้างไฟล์สำรอง: {str(e)}")
+
+        with tab_restore:
+            st.markdown("### อัปโหลดไฟล์สำรองข้อมูลเพื่อกู้คืนเข้าฐานข้อมูล")
+            uploaded_backup = st.file_uploader("เลือกไฟล์ Backup (.json)", type=["json"])
+            if uploaded_backup and st.button("🚀 ยืนยันการกู้คืนข้อมูล", use_container_width=True):
+                try:
+                    content = json.loads(uploaded_backup.getvalue().decode("utf-8"))
+                    
+                    # กู้คืนข้อมูล Users
+                    for u in content.get("users", []):
+                        cursor.execute("""
+                            INSERT INTO users (username, password, is_admin, user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (username) DO NOTHING
+                        """, tuple(u))
+                    
+                    # กู้คืนข้อมูล Characters
+                    for c in content.get("characters", []):
+                        cursor.execute("""
+                            INSERT INTO characters (name, prompt, personality, lore, first_message, creator)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (name) DO UPDATE SET prompt = EXCLUDED.prompt, personality = EXCLUDED.personality, lore = EXCLUDED.lore
+                        """, tuple(c))
+
+                    # กู้คืนข้อมูล Supporting Characters
+                    for s in content.get("supporting_characters", []):
+                        cursor.execute("""
+                            INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, tuple(s))
+
+                    # กู้คืนข้อมูล Quests
+                    for q in content.get("quests", []):
+                        cursor.execute("""
+                            INSERT INTO quests (char_name, task_desc, reward_points)
+                            VALUES (%s, %s, %s)
+                        """, tuple(q))
+
+                    conn.commit()
+                    st.success("🎉 กู้คืนข้อมูลเข้าระบบสำเร็จเรียบร้อยแล้ว!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการกู้คืนข้อมูล: {str(e)}")
         return
 
     # ✨ สร้างตัวละครหลักด้วย AI
