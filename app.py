@@ -35,9 +35,28 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 model_name = "gemini-3.5-flash-lite"
 
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "username" not in st.session_state: st.session_state.username = ""
-if "is_admin" not in st.session_state: st.session_state.is_admin = False
+# 🔄 ระบบจัดการ Session และ Query Params เพื่อกันหลุดเวลา Refresh หน้าเว็บ
+query_params = st.query_params
+
+if "logged_in" not in st.session_state:
+    if "user" in query_params:
+        u_check = query_params["user"]
+        cursor.execute("SELECT username, is_admin FROM users WHERE username = ?", (u_check,))
+        row = cursor.fetchone()
+        if row:
+            st.session_state.logged_in = True
+            st.session_state.username = row[0]
+            st.session_state.is_admin = bool(1 if row[0].lower() == "admin" else row[1])
+        else:
+            st.session_state.logged_in = False
+            st.session_state.username = ""
+            st.session_state.is_admin = False
+    else:
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.session_state.is_admin = False
+
+if "in_chat" not in st.session_state: st.session_state.in_chat = False
 
 # 🔐 หน้าจอ Login
 if not st.session_state.logged_in:
@@ -54,6 +73,8 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = l_user
                     st.session_state.is_admin = bool(1 if l_user.lower() == "admin" else row[1])
+                    # บันทึกสถานะลงใน Query Params เพื่อให้จำค่าได้หลังกด Refresh
+                    st.query_params["user"] = l_user
                     st.rerun()
                 else:
                     st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
@@ -84,7 +105,6 @@ u_name, u_persona = (u_row[0], u_row[1]) if u_row else (current_user, "")
 cursor.execute("SELECT name FROM characters")
 all_chars = [row[0] for row in cursor.fetchall()]
 
-if "in_chat" not in st.session_state: st.session_state.in_chat = False
 if "current_char" not in st.session_state or st.session_state.current_char not in all_chars:
     st.session_state.current_char = all_chars[0] if all_chars else None
 
@@ -93,6 +113,8 @@ with st.sidebar:
     if st.button("🚪 ออกจากระบบ", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.in_chat = False
+        if "user" in st.query_params:
+            del st.query_params["user"]
         st.rerun()
     st.divider()
     if st.button("🏠 กลับหน้าแรก", use_container_width=True):
