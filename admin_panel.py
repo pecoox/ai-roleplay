@@ -384,7 +384,51 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "👥 จัดการผู้ใช้งานระบบ" and is_admin:
-        st.markdown("### 👥 รายชื่อผู้ใช้งานทั้งหมด")
+        st.markdown("### 👥 จัดการผู้ใช้งานระบบ")
         cursor.execute("SELECT username, is_admin FROM users")
-        for u, adm in cursor.fetchall():
-            st.markdown(f"- `{u}` ({'Admin' if adm else 'User'})")
+        users_list = cursor.fetchall()
+        
+        user_dict = {u[0]: bool(u[1]) for u in users_list}
+        selected_target_user = st.selectbox("เลือกผู้ใช้งานที่ต้องการจัดการ:", list(user_dict.keys()))
+        
+        is_target_admin = user_dict[selected_target_user]
+        
+        with st.form("manage_user_form"):
+            st.markdown(f"**กำลังจัดการผู้ใช้:** `{selected_target_user}`")
+            
+            # ป้องกันไม่ให้ถอดสิทธิ์บัญชี admin หลัก
+            if selected_target_user.lower() == "admin":
+                st.info("ℹ️ บัญชี `admin` หลักถูกล็อกสิทธิ์ผู้ดูแลระบบไว้ถาวร")
+                new_role_admin = True
+            else:
+                new_role_admin = st.checkbox("ตั้งค่าเป็นผู้ดูแลระบบ (Admin)", value=is_target_admin)
+                
+            new_pass = st.text_input("เปลี่ยนรหัสผ่านใหม่ (ปล่อยว่างถ้าไม่เปลี่ยน):", type="password")
+            
+            sub_col1, sub_col2 = st.columns(2)
+            save_user = sub_col1.form_submit_button("💾 บันทึกการแก้ไข", use_container_width=True)
+            del_user = sub_col2.form_submit_button("🗑️ ลบผู้ใช้นี้", use_container_width=True)
+
+            if save_user:
+                if selected_target_user.lower() == "admin" and not new_role_admin:
+                    st.error("ไม่สามารถลดสิทธิ์บัญชี admin หลักได้!")
+                else:
+                    if new_pass.strip():
+                        hashed_p = hashlib.sha256(new_pass.encode()).hexdigest()
+                        cursor.execute("UPDATE users SET password = ?, is_admin = ? WHERE username = ?", (hashed_p, 1 if new_role_admin else 0, selected_target_user))
+                    else:
+                        cursor.execute("UPDATE users SET is_admin = ? WHERE username = ?", (1 if new_role_admin else 0, selected_target_user))
+                    conn.commit()
+                    st.success(f"อัปเดตข้อมูลผู้ใช้ '{selected_target_user}' สำเร็จ!")
+                    st.rerun()
+
+            if del_user:
+                if selected_target_user.lower() == "admin":
+                    st.error("❌ ไม่อนุญาตให้ลบบัญชีผู้ดูแลระบบหลัก (admin) เด็ดขาด!")
+                elif selected_target_user == current_user:
+                    st.error("คุณไม่สามารถลบบัญชีตัวเองในขณะที่กำลังใช้งานอยู่ได้!")
+                else:
+                    cursor.execute("DELETE FROM users WHERE username = ?", (selected_target_user,))
+                    conn.commit()
+                    st.success(f"ลบบัญชี '{selected_target_user}' เรียบร้อยแล้ว!")
+                    st.rerun()
