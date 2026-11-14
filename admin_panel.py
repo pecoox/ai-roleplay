@@ -7,7 +7,7 @@ from PIL import Image
 import io
 import time
 
-SYSTEM_VERSION = "v2.8.0-Ultimate"
+SYSTEM_VERSION = "v2.9.0-AuditMaster"
 BUILD_DATE = "2026-11-14"
 
 def run_with_timer(title_text, total_seconds=5):
@@ -457,7 +457,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             "🗄️ Database Engine (database.py)": "✅ พร้อมใช้งาน",
             "🛠️ Admin & User Panel (admin_panel.py)": "✅ พร้อมใช้งาน",
             "🌌 Main UI & Chat Engine (app.py)": "✅ พร้อมใช้งาน",
-            "🧠 Smart Memory Compressor": "✅ เปิดใช้งาน",
+            "🛡️ AI Roleplay Auditor (กรรมการตรวจสอบ)": "✅ เปิดใช้งาน",
             "⚡ Cheat Commands (/+ชอบ, /+ผ่านภารกิจ)": "✅ เปิดใช้งาน",
             "💾 Auto Database Backup": "✅ เปิดใช้งาน"
         }
