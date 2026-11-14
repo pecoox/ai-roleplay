@@ -307,14 +307,49 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         st.markdown("### 🎯 จัดการภารกิจ (Quest Log)")
         if user_chars:
             q_target_char = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="q_char_sel")
-            with st.form("add_q_form", clear_on_submit=True):
-                q_desc = st.text_input("รายละเอียดภารกิจใหม่:")
-                q_pts = st.slider("คะแนนรางวัล:", 5, 100, 15)
-                if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and q_desc:
-                    cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (q_target_char, q_desc, q_pts))
-                    conn.commit()
-                    st.success("เพิ่มภารกิจสำเร็จ!")
-                    st.rerun()
+            q_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มภารกิจ", "✏️ แก้ไขภารกิจ", "🗑️ ลบภารกิจ"], key="q_rad")
+
+            if q_action == "➕ เพิ่มภารกิจ":
+                with st.form("add_q_form", clear_on_submit=True):
+                    q_desc = st.text_input("รายละเอียดภารกิจใหม่:")
+                    q_pts = st.slider("คะแนนรางวัล:", 5, 100, 15)
+                    if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and q_desc:
+                        cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (q_target_char, q_desc, q_pts))
+                        conn.commit()
+                        st.success("เพิ่มภารกิจสำเร็จ!")
+                        st.rerun()
+            elif q_action == "✏️ แก้ไขภารกิจ":
+                cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?", (q_target_char,))
+                q_list = cursor.fetchall()
+                if q_list:
+                    q_dict = {f"{q[1]} ({q[2]} แต้ม)": q[0] for q in q_list}
+                    sel_q_label = st.selectbox("เลือกภารกิจที่ต้องการแก้ไข:", list(q_dict.keys()))
+                    sel_q_id = q_dict[sel_q_label]
+                    q_info = next(q for q in q_list if q[0] == sel_q_id)
+
+                    with st.form("edit_q_form"):
+                        eq_desc = st.text_input("รายละเอียดภารกิจ:", value=q_info[1])
+                        eq_pts = st.slider("คะแนนรางวัล:", 5, 100, int(q_info[2]))
+                        if st.form_submit_button("💾 บันทึกการแก้ไขภารกิจ", use_container_width=True):
+                            cursor.execute("UPDATE quests SET task_desc = ?, reward_points = ? WHERE id = ?", (eq_desc, eq_pts, sel_q_id))
+                            conn.commit()
+                            st.success("แก้ไขภารกิจสำเร็จ!")
+                            st.rerun()
+                else:
+                    st.info("ยังไม่มีภารกิจในตัวละครนี้ให้แก้ไข")
+            else:
+                cursor.execute("SELECT id, task_desc FROM quests WHERE char_name = ?", (q_target_char,))
+                q_list = cursor.fetchall()
+                if q_list:
+                    q_dict = {q[1]: q[0] for q in q_list}
+                    sel_q_desc = st.selectbox("เลือกภารกิจที่ต้องการลบ:", list(q_dict.keys()))
+                    if st.button("🗑️ ยืนยันลบภารกิจนี้", use_container_width=True):
+                        cursor.execute("DELETE FROM quests WHERE id = ?", (q_dict[sel_q_desc],))
+                        conn.commit()
+                        st.success("ลบภารกิจสำเร็จ!")
+                        st.rerun()
+                else:
+                    st.info("ยังไม่มีภารกิจในตัวละครนี้")
         else:
             st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
