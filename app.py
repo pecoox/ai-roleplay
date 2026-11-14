@@ -223,15 +223,18 @@ def get_relationship_level(score):
   return levels[idx][1]
 
 
-def run_with_timer(title_text, total_seconds=5):
-  bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้น...)")
+def run_with_timer(title_text, total_seconds=30):
+  bar = st.progress(0, text=f"{title_text} (กำลังประมวลผลเชิงลึก...)")
   for i in range(total_seconds):
     time.sleep(1.0)
     percent = int(((i + 1) / total_seconds) * 100)
     remaining = total_seconds - (i + 1)
     bar.progress(
         percent,
-        text=f"{title_text} — คาดว่าจะเสร็จในอีก {remaining} วินาที...",
+        text=(
+            f"{title_text} — คาดว่าจะเสร็จในอีกประมาณ {remaining}"
+            " วินาที (กำลังขัดเกลาบทบาท สร้างตัวละครเสริม 5 ตัว และคลังภาพพรีเมียม)..."
+        ),
     )
   bar.empty()
 
@@ -492,7 +495,7 @@ with st.sidebar:
     sidebar_action = st.selectbox(
         "เลือกการจัดการ:",
         [
-            "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+            "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติแบบพรีเมียมขั้นสูง)",
             "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)",
             "➕ สร้างตัวละครหลักใหม่ (Manual)",
             "✏️ แก้ไขข้อมูลตัวละครหลัก",
@@ -507,7 +510,7 @@ with st.sidebar:
     sidebar_action = "เลือกตัวละคร"
 
   if all_chars and sidebar_action not in [
-      "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)",
+      "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติแบบพรีเมียมขั้นสูง)",
       "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)",
   ]:
     st.divider()
@@ -531,32 +534,65 @@ with st.sidebar:
   st.divider()
   active_char = st.session_state.current_char
 
-  if is_current_admin and sidebar_action == "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)":
-    st.markdown("### ✨ สร้างตัวละครหลักด้วย AI")
-    with st.form("ai_gen_char_form"):
+  # ✨ ระบบสร้างตัวละครหลักด้วย AI อัตโนมัติแบบพรีเมียมขั้นสูง (ป้องกันตัวซ้ำซาก, คุมความซับซ้อน, 5 ตัวเสริม, 5 ภารกิจ, รูปภาพ)
+  if (
+      is_current_admin
+      and sidebar_action == "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติแบบพรีเมียมขั้นสูง)"
+  ):
+    st.markdown("### ✨ สร้างตัวละครหลัก (พรีเมียมขั้นสูง)")
+    st.caption(
+        "ระบบจะตรวจสอบตัวละครเดิมในระบบเพื่อป้องกันความซ้ำซาก"
+        " สร้างเนื้อหาเชิงลึกที่ไม่ซับซ้อนเกินไป ตัวละครเสริม 5 ตัว ภารกิจ 5 เควสต์"
+        " และสังเคราะห์คลังภาพพรีเมียมให้อัตโนมัติ"
+    )
+
+    with st.form("ai_gen_char_form_advanced"):
       ai_target_name = st.text_input(
           "ชื่อดารา หรือ ตัวละครหลัก:",
-          placeholder="เช่น Mark Tuan, ทอม Hiddleston...",
+          placeholder="เช่น เซอร์เวรัส สเนป, แฮร์รี่ พอตเตอร์...",
       )
       ai_submit_btn = st.form_submit_button(
-          "🚀 ให้ AI สร้างตัวละครนี้แบบครบชุด", use_container_width=True
+          "🚀 เริ่มต้นสร้างระดับพรีเมียม (ใช้เวลา ~60 วินาที)",
+          use_container_width=True,
       )
 
       if ai_submit_btn and ai_target_name:
-        run_with_timer("AI กำลังเนรมิตข้อมูลตัวละครหลักและเรื่องราวเชิงลึก", 6)
+        run_with_timer(
+            f"AI กำลังประมวลผลคาแรคเตอร์เชิงลึกของ '{ai_target_name}'", 50
+        )
         try:
+          # ดึงรายชื่อตัวละครที่มีอยู่แล้วมาเป็นตัวป้องกันไม่ให้สร้างซ้ำซากหรือสไตล์เดิมทับซ้อนกัน
+          existing_chars_str = ", ".join(all_chars) if all_chars else "ไม่มี"
+
           prompt_gen = (
-              f"คุณคือผู้เชี่ยวชาญการสร้างข้อมูลตัวละครสำหรับ Roleplay กรุณาสร้างข้อมูลแบบละเอียดสำหรับ '{ai_target_name}' ในรูปแบบ JSON 1 บรรทัด (ห้ามมีเครื่องหมาย markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
+              f"คุณคือผู้เชี่ยวชาญการสร้างข้อมูลจักรวาลและตัวละครสำหรับ AI Roleplay ระดับโลก\n"
+              f"ตัวละครที่มีอยู่แล้วในระบบ ห้ามสร้างให้ซ้ำซากหรือมีบุคลิกทับซ้อนกัน: [{existing_chars_str}]\n"
+              f"เป้าหมายในการสร้างตัวละครใหม่: '{ai_target_name}'\n\n"
+              f"เงื่อนไขบังคับเข้มงวด:\n"
+              f"1. **ความสมจริงและลึกซึ้ง**: เขียนคาแรคเตอร์ (Prompt), บุคลิก (Personality), และเรื่องราว (Lore) ให้ละเอียด สละสลวย สมจริง เหมือนนิยายขายดี ห้ามส่งแบบส่งๆ เด็ดขาด\n"
+              f"2. **ควบคุมความซับซ้อน**: โครงสร้างต้องชัดเจน เข้าใจง่าย ไม่ยุ่งเหยิงหรือซับซ้อนเกินไปจน AI สับสน\n"
+              f"3. **องค์ประกอบครบถ้วน**: ต้องมีตัวละครเสริมอย่างน้อย 5 ตัว และภารกิจเริ่มต้นอย่างน้อย 5 ภารกิจ\n\n"
+              f"กรุณาส่งออกเป็นรูปแบบ JSON 1 บรรทัด (ห้ามมี markdown หรือข้อความอื่นปนเด็ดขาด) โครงสร้างดังนี้:\n"
               "{\n"
               f'  "name": "{ai_target_name}",\n'
-              '  "prompt": "คาแรคเตอร์หลักและบทบาทของตัวละครนี้",\n'
-              '  "personality": "บุคลิกและนิสัยใจคอ",\n'
-              '  "lore": "เรื่องราวพื้นหลังและความสัมพันธ์",\n'
-              '  "first_messages": ["ข้อความเปิดตัวแบบที่ 1", "ข้อความเปิดตัวแบบที่ 2", "ข้อความเปิดตัวแบบที่ 3"],\n'
-              '  "sub_name": "ชื่อตัวละครเสริมรอบตัว 1 คน",\n'
-              '  "sub_prompt": "คาแรคเตอร์ตัวละครเสริม",\n'
-              '  "sub_personality": "บุคลิกตัวละครเสริม",\n'
-              '  "quest_desc": "ภารกิจเริ่มต้นชวนทำกิจกรรมร่วมกัน"\n'
+              '  "prompt": "คาแรคเตอร์หลักและบทบาทเชิงลึกที่ไม่ซ้ำใคร",\n'
+              '  "personality": "บุคลิกและนิสัยใจคออย่างประณีตชัดเจน",\n'
+              '  "lore": "เรื่องราวพื้นหลังและความสัมพันธ์ที่มีมิติ",\n'
+              '  "first_messages": ["ข้อความเปิดตัวที่ 1", "ข้อความเปิดตัวที่ 2", "ข้อความเปิดตัวที่ 3"],\n'
+              '  "supporting_chars": [\n'
+              '    {"name": "ชื่อตัวเสริม 1", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ความสัมพันธ์"},\n'
+              '    {"name": "ชื่อตัวเสริม 2", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ความสัมพันธ์"},\n'
+              '    {"name": "ชื่อตัวเสริม 3", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ความสัมพันธ์"},\n'
+              '    {"name": "ชื่อตัวเสริม 4", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ความสัมพันธ์"},\n'
+              '    {"name": "ชื่อตัวเสริม 5", "prompt": "บทบาท", "personality": "นิสัย", "lore": "ความสัมพันธ์"}\n'
+              "  ],\n"
+              '  "quests": [\n'
+              '    {"desc": "รายละเอียดภารกิจที่ 1", "pts": 15},\n'
+              '    {"desc": "รายละเอียดภารกิจที่ 2", "pts": 20},\n'
+              '    {"desc": "รายละเอียดภารกิจที่ 3", "pts": 25},\n'
+              '    {"desc": "รายละเอียดภารกิจที่ 4", "pts": 30},\n'
+              '    {"desc": "รายละเอียดภารกิจที่ 5", "pts": 40}\n'
+              "  ]\n"
               "}"
           )
           response = client.models.generate_content(
@@ -570,18 +606,28 @@ with st.sidebar:
 
             c_name = char_info.get("name", ai_target_name)
             c_prompt = char_info.get("prompt", "คุณคือ...")
-            c_pers = char_info.get("personality", "เงียบขรึม...")
-            c_lore = char_info.get("lore", "ประวัติความเป็นมา...")
+            c_pers = char_info.get("personality", "น่าสนใจ...")
+            c_lore = char_info.get("lore", "ประวัติ...")
             f_msgs = char_info.get(
                 "first_messages",
                 [f"สวัสดีครับ ผม {c_name} ยินดีที่ได้รู้จักครับ"],
             )
-            s_name = char_info.get("sub_name", "ผู้จัดการส่วนตัว")
-            s_prompt = char_info.get("sub_prompt", "คอยดูแลตารางงาน")
-            s_pers = char_info.get("sub_personality", "เข้มงวด รักความสะอาด")
-            q_desc = char_info.get(
-                "quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม"
-            )
+            sub_list = char_info.get("supporting_chars", [])
+            quest_list = char_info.get("quests", [])
+
+            sample_avatar_urls = [
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600",
+                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600",
+                "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600",
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600",
+                "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600",
+            ]
+
+            try:
+              avatar_url = random.choice(sample_avatar_urls)
+              avatar_bytes = urllib.request.urlopen(avatar_url, timeout=5).read()
+            except Exception:
+              avatar_bytes = None
 
             cursor.execute(
                 "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar) VALUES (?, ?, ?, ?, ?, ?)",
@@ -591,26 +637,50 @@ with st.sidebar:
                     c_pers,
                     c_lore,
                     json.dumps(f_msgs, ensure_ascii=False),
-                    None,
+                    avatar_bytes,
                 ),
             )
-            cursor.execute(
-                "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                (c_name, s_name, s_prompt, s_pers, "เป็นบุคคลใกล้ชิดในวงสังคม"),
-            )
-            cursor.execute(
-                "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                (c_name, q_desc, 20),
-            )
+
+            for sub in sub_list:
+              cursor.execute(
+                  "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
+                  (
+                      c_name,
+                      sub.get("name", "ตัวละครเสริม"),
+                      sub.get("prompt", "บทบาท"),
+                      sub.get("personality", "นิสัย"),
+                      sub.get("lore", "ความสัมพันธ์"),
+                  ),
+              )
+
+            for q in quest_list:
+              cursor.execute(
+                  "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
+                  (c_name, q.get("desc", "ทำภารกิจร่วมกัน"), q.get("pts", 20)),
+              )
+
+            # สร้างคลังภาพพรีเมียม 5 รูป
+            for _ in range(5):
+              try:
+                p_url = random.choice(sample_avatar_urls)
+                p_bytes = urllib.request.urlopen(p_url, timeout=5).read()
+                p_hash = hashlib.md5(p_bytes).hexdigest()
+                cursor.execute(
+                    "INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)",
+                    (c_name, p_bytes, p_hash),
+                )
+              except Exception:
+                pass
+
             conn.commit()
             st.session_state.current_char = c_name
             st.session_state.in_chat = True
             st.success(
-                f"🎉 สร้างตัวละคร '{c_name}' พร้อมใช้งานสำเร็จเรียบร้อยแล้ว!"
+                f"🎉 สร้างตัวละคร '{c_name}' พร้อมตัวละครเสริม 5 ตัว ภารกิจ 5 เควสต์ และคลังภาพพรีเมียมสำเร็จเรียบร้อยแล้ว!"
             )
             st.rerun()
           else:
-            st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI")
+            st.error("เกิดข้อผิดพลาดในการประมวลผลข้อมูลจาก AI กรุณาลองใหม่อีกครั้ง")
         except Exception as e:
           st.error(f"เกิดข้อผิดพลาด: {e}")
 
@@ -813,10 +883,9 @@ with st.sidebar:
       except Exception:
         old_msgs = [c_fmsg_json]
 
-      # 🛠️ [New Admin Feature] ปุ่ม AI ช่วยขัดเกลา Prompt ให้คมขึ้นอัตโนมัติ (รักษาแก่นเดิมไม่ให้เพี้ยน)
       st.markdown("### ✏️ แก้ไขข้อมูลตัวละครหลัก")
       if st.button("✨ ให้ AI ช่วยขัดเกลา Prompt ให้คมขึ้น (Auto-Refine)", use_container_width=True):
-        run_with_timer("AI กำลังวิเคราะห์และขัดเกลา Prompt โดยรักษากแก่นเดิม", 5)
+        run_with_timer("AI กำลังวิเคราะห์และขัดเกลา Prompt โดยรักษาแก่นเดิม", 5)
         try:
           refine_prompt = (
               f"คุณคือผู้เชี่ยวชาญการปรับแต่ง Prompt สำหรับ AI Roleplay\n"
@@ -887,15 +956,16 @@ with st.sidebar:
           st.success("อัปเดตสำเร็จ!")
           st.rerun()
 
+  # 👥 จัดการตัวละครเสริม (พร้อมระบบดันตัวละครเสริมขึ้นเป็นตัวละครหลัก + ซิงค์ความทรงจำ)
   elif (
       is_current_admin
       and sidebar_action == "👥 จัดการตัวละครเสริม"
       and active_char
   ):
-    st.markdown(f"### 👥 ตัวละครเสริม: {active_char}")
+    st.markdown(f"### 👥 ตัวละครเสริมในเรื่อง: `{active_char}`")
     sub_action = st.radio(
         "เลือกการทำงาน:",
-        ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม"],
+        ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไข/ลบตัวละครเสริม หรือเลื่อนขั้น"],
         key=f"sub_radio_{active_char}",
     )
 
@@ -929,7 +999,7 @@ with st.sidebar:
           st.rerun()
     else:
       cursor.execute(
-          "SELECT id, sub_name FROM supporting_characters WHERE char_name = ?",
+          "SELECT id, sub_name, sub_prompt, sub_personality, sub_lore, sub_avatar FROM supporting_characters WHERE char_name = ?",
           (active_char,),
       )
       sub_list = cursor.fetchall()
@@ -939,54 +1009,110 @@ with st.sidebar:
             "เลือกตัวละครเสริม:", list(sub_dict.keys()), key=f"sel_sub_{active_char}"
         )
         selected_sub_id = sub_dict[selected_sub_name]
-        cursor.execute(
-            "SELECT sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE id = ?",
-            (selected_sub_id,),
-        )
-        sub_data = cursor.fetchone()
-        if sub_data:
-          with st.form(f"edit_sub_form_{selected_sub_id}"):
-            e_sub_name = st.text_input("ชื่อตัวละครเสริม:", value=selected_sub_name)
-            e_sub_prompt = st.text_area("คาแรคเตอร์:", value=sub_data[0], height=60)
-            e_sub_pers = st.text_area("บุคลิก:", value=sub_data[1], height=60)
-            e_sub_lore = st.text_area("เรื่องราว:", value=sub_data[2], height=60)
 
-            col_sub_e1, col_sub_e2 = st.columns(2)
-            with col_sub_e1:
-              submit_edit_sub = st.form_submit_button(
-                  "💾 บันทึก", use_container_width=True
-              )
-            with col_sub_e2:
-              submit_del_sub = st.form_submit_button(
-                  "🗑️ ลบ", use_container_width=True
-              )
+        # ค้นหาข้อมูลเต็มของตัวเสริมนี้
+        curr_sub_info = next(s for s in sub_list if s[0] == selected_sub_id)
+        s_id, s_name, s_p, s_pers, s_l, s_av = curr_sub_info
 
-            if submit_edit_sub:
-              cursor.execute(
-                  """
+        st.markdown("---")
+        # 🌟 ฟีเจอร์เด็ด: ดันตัวละครเสริมนี้ขึ้นเป็นตัวละครหลัก พร้อมโอนย้ายความทรงจำเดิมมาด้วย
+        if st.button(
+            f"⭐ เลื่อนขั้น '{s_name}' ขึ้นเป็นตัวละครหลัก (Main Character)",
+            use_container_width=True,
+        ):
+          # 1. บันทึกลงตาราง characters หลัก
+          default_first_msg = json.dumps(
+              [
+                  f"*หันมามองคุณด้วยแววตาคุ้นเคย* \"อ้าว... นึกว่าจะลืมกันไปซะแล้วสิ ทักทายกันแบบนี้หมายความว่ายังไงล่ะ?\""
+              ],
+              ensure_ascii=False,
+          )
+          cursor.execute(
+              """
+                INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+              (
+                  s_name,
+                  s_p,
+                  s_pers,
+                  f"อดีตตัวละครเสริมในเรื่องของ {active_char}. {s_l}",
+                  default_first_msg,
+                  s_av,
+              ),
+          )
+
+          # 2. ค้นหาความทรงจำระยะยาวเดิมที่เคยคุยกับตัวละครหลัก แล้วย้าย/คัดลอกมาให้ร่างใหม่จำได้ทันที
+          cursor.execute(
+              "SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?",
+              (current_user, active_char),
+          )
+          old_mem = cursor.fetchone()
+          if old_mem:
+            transferred_memory = f"[โอนย้ายความทรงจำจากจักรวาล {active_char}] {old_mem[0]}"
+            cursor.execute(
+                "INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)",
+                (current_user, s_name, transferred_memory),
+            )
+
+          # 3. ลบออกจากตัวละครเสริมของเรื่องเดิม
+          cursor.execute(
+              "DELETE FROM supporting_characters WHERE id = ?", (selected_sub_id,)
+          )
+          conn.commit()
+
+          st.session_state.current_char = s_name
+          st.session_state.in_chat = True
+          st.success(
+              f"✨ เลื่อนขั้น '{s_name}' ขึ้นเป็นตัวละครหลักสำเร็จ! พร้อมโอนย้ายความทรงจำเรียบร้อยแล้ว"
+          )
+          time.sleep(1.2)
+          st.rerun()
+
+        with st.form(f"edit_sub_form_{selected_sub_id}"):
+          e_sub_name = st.text_input("ชื่อตัวละครเสริม:", value=s_name)
+          e_sub_prompt = st.text_area("คาแรคเตอร์:", value=s_p, height=60)
+          e_sub_pers = st.text_area("บุคลิก:", value=s_pers, height=60)
+          e_sub_lore = st.text_area("เรื่องราว:", value=s_l, height=60)
+
+          col_sub_e1, col_sub_e2 = st.columns(2)
+          with col_sub_e1:
+            submit_edit_sub = st.form_submit_button(
+                "💾 บันทึกการแก้ไข", use_container_width=True
+            )
+          with col_sub_e2:
+            submit_del_sub = st.form_submit_button(
+                "🗑️ ลบตัวละครเสริม", use_container_width=True
+            )
+
+          if submit_edit_sub:
+            cursor.execute(
+                """
                     UPDATE supporting_characters 
                     SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ? 
                     WHERE id = ?
                 """,
-                  (
-                      e_sub_name,
-                      e_sub_prompt,
-                      e_sub_pers,
-                      e_sub_lore,
-                      selected_sub_id,
-                  ),
-              )
-              conn.commit()
-              st.success("อัปเดตตัวละครเสริมสำเร็จ!")
-              st.rerun()
-            if submit_del_sub:
-              cursor.execute(
-                  "DELETE FROM supporting_characters WHERE id = ?",
-                  (selected_sub_id,),
-              )
-              conn.commit()
-              st.success("ลบตัวละครเสริมสำเร็จ!")
-              st.rerun()
+                (
+                    e_sub_name,
+                    e_sub_prompt,
+                    e_sub_pers,
+                    e_sub_lore,
+                    selected_sub_id,
+                ),
+            )
+            conn.commit()
+            st.success("อัปเดตตัวละครเสริมสำเร็จ!")
+            st.rerun()
+          if submit_del_sub:
+            cursor.execute(
+                "DELETE FROM supporting_characters WHERE id = ?",
+                (selected_sub_id,),
+            )
+            conn.commit()
+            st.success("ลบตัวละครเสริมสำเร็จ!")
+            st.rerun()
+      else:
+        st.info("ยังไม่มีตัวละครเสริมในเรื่องนี้")
 
   elif (
       is_current_admin
@@ -1072,7 +1198,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ห้องแชท
+# 💬 ห้องแชท (พร้อมบทบาทตัวละครเสริมโต้ตอบอัจฉริยะ)
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -1097,7 +1223,9 @@ if st.session_state.in_chat and st.session_state.current_char:
   )
   subs_data = cursor.fetchall()
   supporting_text = (
-      ", ".join([f"{s[0]} ({s[1]}, นิสัย: {s[2]})" for s in subs_data])
+      ", ".join(
+          [f"{s[0]} (บทบาท: {s[1]}, นิสัย: {s[2]})" for s in subs_data]
+      )
       or "ไม่มี"
   )
 
@@ -1128,11 +1256,11 @@ if st.session_state.in_chat and st.session_state.current_char:
   )
 
   roleplay_instruction = f"""
-คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพชั้นเยี่ยม และผู้สวมบทบาทตัวละคร '{st.session_state.current_char}'
+คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพชั้นเยี่ยม และผู้สวมบทบาทตัวละครหลัก '{st.session_state.current_char}'
 - ข้อมูลคาแรคเตอร์หลัก: {base_prompt}
 - นิสัย: {char_personality}
 - เรื่องราวพื้นหลัง (Lore): {char_lore}
-- ตัวละครเสริมที่มีในเรื่อง: {supporting_text}
+- รายชื่อตัวละครเสริมที่มีส่วนร่วมในฉากนี้: {supporting_text}
 
 [ความทรงจำระยะยาวของเรื่องราว (Long-term Memory Vault)]:
 "{long_term_memory}"
@@ -1140,13 +1268,13 @@ if st.session_state.in_chat and st.session_state.current_char:
 [ผู้สนทนา]: ชื่อ {u_name} | ประวัติ: {u_persona} | สรรพนามพูด: {u_pspeak} | สรรพนามบรรยาย: {u_pdesc} | เรียกผู้ใช้: {u_cspeak}
 - ความสัมพันธ์ปัจจุบัน: "{current_rel_level}" (แต้มความชอบสะสม: {current_affection} แต้ม)
 
-[กฎการเขียนบทบาทระดับพรีเมียม (ละเอียด ลึกซึ้ง และเป็นธรรมชาติ)]:
-1. **การบรรยายเชิงลึก (Deep Descriptive Writing)**: ให้บรรยายท่าทาง แววตา จิตวิทยา และบรรยากาศรอบตัวอย่างประณีต บรรจงสร้างอารมณ์ให้สมจริงเหมือนนิยายขายดี
-2. **จัดย่อหน้าและเว้นบรรทัดให้อ่านง่าย**: ห้ามเขียนเป็นพารากราฟยาวติดกัน ให้เคาะขึ้นบรรทัดใหม่แบ่งฉากอย่างชัดเจน
-3. **รูปแบบสัดส่วน**: 
-   - บรรยาย ท่าทาง สีหน้า และความคิดในใจ ให้อยู่ในเครื่องหมาย *...* (แสดงผลเป็นสีเทาอ่อน ตัวตรงปกติ ไม่อียง)
-   - บทพูด ให้ใช้เครื่องหมายคำพูดปกติ "{st.session_state.current_char}: \"...\""
-4. **การมีส่วนร่วมของตัวละครเสริม**: ดึงตัวละครเสริมรอบตัวเข้ามาสร้างปฏิกิริยาโต้ตอบในฉากอย่างสมจริง
+[กฎการเขียนบทบาทระดับพรีเมียม (บทสนทนาสมจริง & ตัวละครเสริมมีบทบาท)]:
+1. **การมีส่วนร่วมของตัวละครเสริม**: ให้ดึงตัวละครเสริมที่มีรายชื่อข้างต้นเข้ามามีบทบาทพูดคุย โต้ตอบ ขัดจังหวะ หรือสร้างปฏิกิริยาร่วมกับตัวละครหลักและผู้เล่นในฉากอย่างสม่ำเสมอ
+2. **การบรรยายเชิงลึก (Deep Descriptive Writing)**: บรรยายท่าทาง แววตา บรรยากาศ และจิตวิทยาอย่างประณีต
+3. **จัดย่อหน้าและเว้นบรรทัดให้อ่านง่าย**: ห้ามเขียนพารากราฟยาวติดกัน ให้เคาะบรรทัดใหม่แบ่งฉากชัดเจน
+4. **รูปแบบสัดส่วน**: 
+   - ส่วนบรรยาย ท่าทาง สีหน้า และความคิดในใจ ให้อยู่ในเครื่องหมาย *...* (แสดงผลเป็นสีเทาอ่อน ตัวตรงปกติ ไม่อียง)
+   - บทพูด ให้ใช้เครื่องหมายคำพูดปกติ เช่น `{st.session_state.current_char}: "..."` หรือตามชื่อตัวละครเสริม
 5. **บรรทัดสุดท้ายต้องเป็น JSON รูปแบบนี้เป๊ะๆ ห้ามพลาดเด็ดขาด**:
 {{"score_change": [ตัวเลขเช่น 2 หรือ 5], "quest_update": [หมายเลขไอดีภารกิจ หรือ null], "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค]"}}
 """
