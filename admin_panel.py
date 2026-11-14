@@ -159,11 +159,24 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             m_prompt = st.text_area("คาแรคเตอร์:", height=60)
             m_pers = st.text_area("บุคลิก:", height=60)
             m_lore = st.text_area("เรื่องราว:", height=60)
-            m_msg = st.text_input("ข้อความเปิดตัวแรก:", value="สวัสดีครับ")
+            
+            st.markdown("---")
+            st.markdown("##### 💬 ข้อความเปิดตัวแรก (3 แบบ สำหรับสุ่ม):")
+            m_msg1 = st.text_area("ข้อความเปิดตัว #1:", height=60)
+            m_msg2 = st.text_area("ข้อความเปิดตัว #2:", height=60)
+            m_msg3 = st.text_area("ข้อความเปิดตัว #3:", height=60)
+            
+            m_avatar = st.file_uploader("รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg", "webp"])
+
             if st.form_submit_button("🚀 บันทึกตัวละคร", use_container_width=True) and m_name:
+                avatar_bytes = m_avatar.getvalue() if m_avatar is not None else None
+                combined_msgs = json.dumps([m.strip() for m in [m_msg1, m_msg2, m_msg3] if m.strip()], ensure_ascii=False)
+                if not combined_msgs or combined_msgs == "[]":
+                    combined_msgs = json.dumps(["*ปรายตามองคุณด้วยความเรียบเฉย* \"มีธุระอะไร?\""], ensure_ascii=False)
+
                 cursor.execute(
-                    "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, creator) VALUES (?, ?, ?, ?, ?, ?)",
-                    (m_name, m_prompt, m_pers, m_lore, json.dumps([m_msg], ensure_ascii=False), current_user)
+                    "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (m_name, m_prompt, m_pers, m_lore, combined_msgs, avatar_bytes, current_user)
                 )
                 conn.commit()
                 st.session_state.current_char = m_name
@@ -175,15 +188,36 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         st.markdown("### ✏️ แก้ไขข้อมูลตัวละครหลัก")
         if user_chars:
             edit_target = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="edit_target_sel")
-            cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = ?", (edit_target,))
+            cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?", (edit_target,))
             e_data = cursor.fetchone()
             if e_data:
+                e_p, e_pers, e_lore, e_fmsg_json, e_avatar = e_data
+                try:
+                    old_msgs = json.loads(e_fmsg_json)
+                except:
+                    old_msgs = [e_fmsg_json]
+
                 with st.form("edit_char_manual_form"):
-                    e_p = st.text_area("คาแรคเตอร์:", value=e_data[0], height=80)
-                    e_pers = st.text_area("บุคลิก:", value=e_data[1], height=80)
-                    e_lore = st.text_area("เรื่องราว:", value=e_data[2], height=80)
+                    e_prompt = st.text_area("คาแรคเตอร์:", value=e_p, height=70)
+                    e_pers_val = st.text_area("บุคลิก:", value=e_pers, height=70)
+                    e_lore_val = st.text_area("เรื่องราว:", value=e_lore, height=70)
+                    
+                    st.markdown("---")
+                    st.markdown("##### 💬 แก้ไขข้อความเปิดตัว (3 แบบ):")
+                    e_m1 = st.text_area("ข้อความ #1:", value=old_msgs[0] if len(old_msgs) > 0 else "", height=60)
+                    e_m2 = st.text_area("ข้อความ #2:", value=old_msgs[1] if len(old_msgs) > 1 else "", height=60)
+                    e_m3 = st.text_area("ข้อความ #3:", value=old_msgs[2] if len(old_msgs) > 2 else "", height=60)
+                    
+                    edit_avatar = st.file_uploader("เปลี่ยนรูปโปรไฟล์", type=["png", "jpg", "jpeg", "webp"])
+
                     if st.form_submit_button("💾 บันทึกการแก้ไข", use_container_width=True):
-                        cursor.execute("UPDATE characters SET prompt = ?, personality = ?, lore = ? WHERE name = ?", (e_p, e_pers, e_lore, edit_target))
+                        new_avatar_bytes = edit_avatar.getvalue() if edit_avatar is not None else e_avatar
+                        new_combined_msgs = json.dumps([m.strip() for m in [e_m1, e_m2, e_m3] if m.strip()], ensure_ascii=False)
+                        
+                        cursor.execute(
+                            "UPDATE characters SET prompt = ?, personality = ?, lore = ?, first_message = ?, avatar = ? WHERE name = ?",
+                            (e_prompt, e_pers_val, e_lore_val, new_combined_msgs, new_avatar_bytes, edit_target)
+                        )
                         conn.commit()
                         st.success("บันทึกการแก้ไขสำเร็จ!")
                         st.rerun()
