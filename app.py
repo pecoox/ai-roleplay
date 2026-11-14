@@ -31,7 +31,6 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* หลอดสถานะความชอบขนาดเล็กบนหัวแชท AI */
     .affection-badge {
         display: inline-block;
         background: linear-gradient(135deg, rgba(255,105,180,0.2), rgba(138,43,226,0.2));
@@ -43,7 +42,6 @@ st.markdown(
         font-weight: bold;
     }
 
-    /* 🖋️ บังคับข้อความบรรยายให้เป็นสีเทาอ่อน และเป็นตัวตรงปกติ ไม่อียง */
     .stChatMessage p em, .stChatMessage em {
         color: #94a3b8 !important;
         font-style: normal !important;
@@ -223,9 +221,8 @@ def get_relationship_level(score):
   return levels[idx][1]
 
 
-# ⏳ ฟังก์ชันจำลองการรอพร้อมแสดงผล Progress Bar และเวลาถอยหลังแบบละเอียด
-def run_with_timer(title_text, total_seconds=25):
-  bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้นกระบวนการ...)")
+def run_with_timer(title_text, total_seconds=30):
+  bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้นประมวลผล...)")
   for i in range(total_seconds):
     time.sleep(1.0)
     percent = int(((i + 1) / total_seconds) * 100)
@@ -234,7 +231,7 @@ def run_with_timer(title_text, total_seconds=25):
         percent,
         text=(
             f"{title_text} — คาดว่าจะเสร็จในอีกประมาณ {remaining}"
-            " วินาที (กำลังประมวลผลข้อมูลเชิงลึกและสร้างสรรค์องค์ประกอบ)..."
+            " วินาที (กำลังสร้างสรรค์เนื้อหาและองค์ประกอบระดับพรีเมียม)..."
         ),
     )
   bar.empty()
@@ -535,18 +532,12 @@ with st.sidebar:
   st.divider()
   active_char = st.session_state.current_char
 
-  # ✨ ระบบสร้างตัวละครหลักด้วย AI อัตโนมัติแบบพรีเมียมขั้นสูง (ป้องกันตัวซ้ำซาก, 5 ตัวเสริม, 5 ภารกิจ, รูปภาพ)
+  # ✨ ระบบสร้างตัวละครหลักด้วย AI อัตโนมัติแบบพรีเมียมขั้นสูง
   if (
       is_current_admin
       and sidebar_action == "✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติแบบพรีเมียมขั้นสูง)"
   ):
     st.markdown("### ✨ สร้างตัวละครหลัก (พรีเมียมขั้นสูง)")
-    st.caption(
-        "ระบบจะตรวจสอบตัวละครเดิมในระบบเพื่อป้องกันความซ้ำซาก"
-        " สร้างเนื้อหาเชิงลึก ตัวละครเสริม 5 ตัว ภารกิจ 5 เควสต์"
-        " และสังเคราะห์คลังภาพพรีเมียมให้อัตโนมัติ"
-    )
-
     with st.form("ai_gen_char_form_advanced"):
       ai_target_name = st.text_input(
           "ชื่อดารา หรือ ตัวละครหลัก:",
@@ -954,7 +945,7 @@ with st.sidebar:
           st.success("อัปเดตสำเร็จ!")
           st.rerun()
 
-  # 👥 จัดการตัวละครเสริม (พร้อมระบบดันตัวละครเสริมขึ้นเป็นตัวละครหลัก + ซิงค์ความทรงจำ)
+  # 👥 จัดการตัวละครเสริม
   elif (
       is_current_admin
       and sidebar_action == "👥 จัดการตัวละครเสริม"
@@ -1106,6 +1097,51 @@ with st.sidebar:
             st.rerun()
       else:
         st.info("ยังไม่มีตัวละครเสริมในเรื่องนี้")
+
+  # 🖼️ จัดการคลังรูปภาพ (เติมกลับมาให้เรียบร้อย)
+  elif (
+      is_current_admin
+      and sidebar_action == "🖼️ จัดการคลังรูปภาพ"
+      and active_char
+  ):
+    st.markdown(f"### 🖼️ จัดการคลังรูปภาพของ: `{active_char}`")
+    
+    with st.form(f"upload_photo_form_{active_char}", clear_on_submit=True):
+      new_photos = st.file_uploader(
+          "อัปโหลดรูปภาพเข้าคลัง (เลือกได้หลายรูป):",
+          type=["png", "jpg", "jpeg", "webp"],
+          accept_multiple_files=True,
+      )
+      if st.form_submit_button("📥 บันทึกรูปลงคลัง", use_container_width=True) and new_photos:
+        for photo_file in new_photos:
+          p_bytes = photo_file.getvalue()
+          p_hash = hashlib.md5(p_bytes).hexdigest()
+          cursor.execute(
+              "INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)",
+              (active_char, p_bytes, p_hash),
+          )
+        conn.commit()
+        st.success("อัปโหลดรูปภาพเข้าคลังสำเร็จ!")
+        st.rerun()
+
+    st.divider()
+    st.markdown("#### 📂 รูปภาพที่มีอยู่ในคลังปัจจุบัน:")
+    cursor.execute("SELECT id, photo FROM character_photos WHERE char_name = ?", (active_char,))
+    photos_in_db = cursor.fetchall()
+
+    if photos_in_db:
+      cols_img = st.columns(3)
+      for idx, (p_id, p_blob) in enumerate(photos_in_db):
+        with cols_img[idx % 3]:
+          with st.container(border=True):
+            st.image(Image.open(io.BytesIO(p_blob)), use_container_width=True)
+            if st.button("🗑️ ลบรูปนี้", key=f"del_photo_{p_id}", use_container_width=True):
+              cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
+              conn.commit()
+              st.success("ลบรูปภาพสำเร็จ!")
+              st.rerun()
+    else:
+      st.info("ยังไม่มีรูปภาพในคลังของตัวละครนี้")
 
   elif (
       is_current_admin
