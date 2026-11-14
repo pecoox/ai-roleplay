@@ -143,12 +143,14 @@ if not st.session_state.in_chat:
     if not all_chars:
         st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักผ่านเมนูด้านข้าง")
     else:
-        # จัดคอลัมน์ให้แสดงผลสวยงาม 3 คอลัมน์มาตรฐานบนคอมพิวเตอร์
         cols = st.columns(3)
         for idx, c_name in enumerate(all_chars):
             cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?", (c_name,))
             c_data = cursor.fetchone()
-            c_prompt, c_pers, c_lore, c_avatar_blob = c_data[0], c_data[1], c_data[2], c_data[3]
+            if c_data:
+                c_prompt, c_pers, c_lore, c_avatar_blob = c_data[0], c_data[1], c_data[2], c_data[3]
+            else:
+                c_prompt, c_pers, c_lore, c_avatar_blob = "", "", "", None
             
             with cols[idx % 3]:
                 with st.container(border=True):
@@ -176,9 +178,12 @@ if not st.session_state.in_chat:
 if st.session_state.in_chat and st.session_state.current_char:
     cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?", (st.session_state.current_char,))
     char_data = cursor.fetchone()
-    base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = (
-        (char_data[0], char_data[1], char_data[2], char_data[3], Image.open(io.BytesIO(char_data[4]))) if (char_data and char_data[4]) else (char_data[0], char_data[1], char_data[2], char_data[3], None)
-    )
+    if char_data:
+        base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = (
+            char_data[0], char_data[1], char_data[2], char_data[3], Image.open(io.BytesIO(char_data[4])) if char_data[4] else None
+        )
+    else:
+        base_prompt, char_personality, char_lore, char_first_msg_raw, char_avatar_img = "", "", "", "", None
 
     cursor.execute("SELECT sub_name, sub_prompt, sub_personality FROM supporting_characters WHERE char_name = ?", (st.session_state.current_char,))
     supporting_text = ", ".join([f"{s[0]} ({s[1]})" for s in cursor.fetchall()]) or "ไม่มี"
@@ -188,7 +193,7 @@ if st.session_state.in_chat and st.session_state.current_char:
     
     cursor.execute("SELECT affection_score, relationship_level FROM character_status WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     status_row = cursor.fetchone()
-    current_affection, current_rel_level = status_row[0], status_row[1]
+    current_affection, current_rel_level = (status_row[0], status_row[1]) if status_row else (0, 'คนแปลกหน้า')
 
     cursor.execute("SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     mem_row = cursor.fetchone()
