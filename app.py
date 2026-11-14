@@ -223,7 +223,6 @@ def get_relationship_level(score):
   return levels[idx][1]
 
 
-# ⏳ ฟังก์ชันจำลองการรอพร้อมแสดงผล Progress Bar และเวลาถอยหลังแบบละเมียดละไม
 def run_with_timer(title_text, total_seconds=5):
   bar = st.progress(0, text=f"{title_text} (กำลังเริ่มต้น...)")
   for i in range(total_seconds):
@@ -814,6 +813,34 @@ with st.sidebar:
       except Exception:
         old_msgs = [c_fmsg_json]
 
+      # 🛠️ [New Admin Feature] ปุ่ม AI ช่วยขัดเกลา Prompt ให้คมขึ้นอัตโนมัติ (รักษาแก่นเดิมไม่ให้เพี้ยน)
+      st.markdown("### ✏️ แก้ไขข้อมูลตัวละครหลัก")
+      if st.button("✨ ให้ AI ช่วยขัดเกลา Prompt ให้คมขึ้น (Auto-Refine)", use_container_width=True):
+        run_with_timer("AI กำลังวิเคราะห์และขัดเกลา Prompt โดยรักษากแก่นเดิม", 5)
+        try:
+          refine_prompt = (
+              f"คุณคือผู้เชี่ยวชาญการปรับแต่ง Prompt สำหรับ AI Roleplay\n"
+              f"ข้อมูลปัจจุบันของตัวละคร '{active_char}':\n"
+              f"- คาแรคเตอร์เดิม: {c_prompt}\n"
+              f"- บุคลิกเดิม: {c_pers}\n"
+              f"- เรื่องราวเดิม: {c_lore}\n\n"
+              f"กรุณาปรับปรุงและขัดเกลาข้อความเหล่านี้ให้มีความคมชัด สละสลวย และช่วยให้ AI สวมบทบาทได้อย่างเป็นธรรมชาติยิ่งขึ้น แต่ **ต้องรักษาแก่นแท้ (Core Identity) เดิมไว้ห้ามให้เปลี่ยนเป็นคาแรคเตอร์อื่นเด็ดขาด**\n"
+              f"ส่งออกผลลัพธ์ในรูปแบบ JSON 1 บรรทัด (ห้ามมี markdown อื่นปน) โครงสร้างดังนี้:\n"
+              '{"refined_prompt": "คาแรคเตอร์ที่ขัดเกลาแล้ว", "refined_personality": "บุคลิกที่ขัดเกลาแล้ว", "refined_lore": "เรื่องราวที่ขัดเกลาแล้ว"}'
+          )
+          ref_res = client.models.generate_content(
+              model=model_name, contents=refine_prompt
+          )
+          r_text = ref_res.text.strip()
+          if "{" in r_text and "}" in r_text:
+            r_json = json.loads(r_text[r_text.find("{") : r_text.rfind("}") + 1])
+            c_prompt = r_json.get("refined_prompt", c_prompt)
+            c_pers = r_json.get("refined_personality", c_pers)
+            c_lore = r_json.get("refined_lore", c_lore)
+            st.success("✨ AI ขัดเกลาข้อมูลเรียบร้อยแล้ว (กดบันทึกด้านล่างเพื่อยืนยัน)")
+        except Exception as e:
+          st.error(f"เกิดข้อผิดพลาดในการขัดเกลา: {e}")
+
       with st.form(f"edit_char_form_{active_char}"):
         edit_prompt = st.text_area(
             "คาแรคเตอร์หลัก:", value=c_prompt, height=60
@@ -1045,7 +1072,7 @@ if not st.session_state.in_chat:
 
 
 # ==========================================
-# 💬 ห้องแชท (พร้อมระบบ AI Game Master แบบละเอียดขั้นสุด + ตัวนับเวลาถอยหลัง)
+# 💬 ห้องแชท
 # ==========================================
 if st.session_state.in_chat and st.session_state.current_char:
   cursor.execute(
@@ -1196,7 +1223,6 @@ if st.session_state.in_chat and st.session_state.current_char:
       conn.commit()
       st.rerun()
 
-  # 🛠️ [Admin Feature] AI กรรมการตรวจบทบาทแบบละเอียดขั้นสุด พร้อม Timer
   if is_current_admin:
     with st.expander(
         "🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาทแบบละเอียดขั้นสุด"
@@ -1223,7 +1249,7 @@ if st.session_state.in_chat and st.session_state.current_char:
               f"กรุณาวิเคราะห์และรายงานผลอย่างละเอียดเป็นภาษาไทย โดยครอบคลุมประเด็นต่อไปนี้:\n"
               f"1. **คะแนนความเข้าบทบาท (0-10):** [พร้อมให้เหตุผลรองรับ]\n"
               f"2. **การวิเคราะห์เชิงลึก (In-depth Analysis):** [วิเคราะห์ความต่อเนื่องของพล็อต, การรักษาคาแรคเตอร์, จิตวิทยาตัวละคร, และความสมจริงของภาษาบรรยาย]\n"
-              f"3. **จุดที่ควรปรับปรุง & แนวทางแกไข (Constructive Feedback):** [แนะนำจุดที่ยังดูแข็งทื่อ พร้อมระบุวิธีปรับแก้ System Prompt หรือท่าทีของบอทให้มีความเป็นธรรมชาติสูงสุด]"
+              f"3. **จุดที่ควรปรับปรุง & แนวทางแก้ไข (Constructive Feedback):** [แนะนำจุดที่ยังดูแข็งทื่อ พร้อมระบุวิธีปรับแก้ System Prompt หรือท่าทีของบอทให้มีความเป็นธรรมชาติสูงสุด]"
           )
           audit_res = client.models.generate_content(
               model=model_name, contents=audit_prompt
