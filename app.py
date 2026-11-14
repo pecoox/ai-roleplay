@@ -279,6 +279,31 @@ if st.session_state.in_chat and st.session_state.current_char:
             conn.commit()
             st.rerun()
 
+    # 🛡️ [Admin Feature] ปุ่ม AI กรรมการตรวจสอบบทบาทและทดสอบ AI ตัวต่อตัว
+    if is_current_admin:
+        with st.expander("🛡️ [Admin Sandbox & Auditor] AI กรรมการตรวจสอบและจำลองบทบาท"):
+            st.caption("คลิกปุ่มด้านล่างเพื่อให้ AI กรรมการอิสระ ทำการตรวจสอบบทสนทนาย้อนหลัง วิเคราะห์การเข้าคาแรคเตอร์ และแนะนำแนวทางแก้ปัญหาทันที")
+            if st.button("🧪 รัน AI กรรมการตรวจสอบบทบาทขั้นสูง", use_container_width=True):
+                run_with_timer("AI กรรมการกำลังตรวจสอบบทสนทนาและจิตวิทยาตัวละคร", 5)
+                try:
+                    recent_chat_log = "\n".join([f"{m['role']}: {m['content']}" for m in current_messages[-8:]])
+                    audit_prompt = (
+                        f"คุณคือ AI Game Master ผู้เชี่ยวชาญระดับสูงในการตรวจสอบและวิเคราะห์การสวมบทบาท (Advanced Roleplay Audit)\n"
+                        f"ข้อมูลตัวละครหลัก '{st.session_state.current_char}':\n"
+                        f"- คาแรคเตอร์: {base_prompt}\n"
+                        f"- บุคลิก: {char_personality}\n\n"
+                        f"บทสนทนาล่าสุด:\n{recent_chat_log}\n\n"
+                        f"กรุณาวิเคราะห์และรายงานผลเป็นภาษาไทย:\n"
+                        f"1. **คะแนนความเข้าบทบาท (0-10):** พร้อมเหตุผลประกอบ\n"
+                        f"2. **การวิเคราะห์เชิงลึก:** ความต่อเนื่องของพล็อต การรักษาคาแรคเตอร์ และความสมจริง\n"
+                        f"3. **ข้อเสนอแนะในการปรับปรุง:** หากคะแนนน้อยหรือหลุดคาแรคเตอร์ ควรปรับ Prompt หรือท่าทีอย่างไรให้เป็นธรรมชาติที่สุด"
+                    )
+                    audit_res = client.models.generate_content(model=model_name, contents=audit_prompt)
+                    st.markdown("### 📊 ผลการตรวจสอบจาก AI กรรมการ:")
+                    st.info(audit_res.text)
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการตรวจสอบ: {e}")
+
     st.divider()
 
     for message in current_messages:
