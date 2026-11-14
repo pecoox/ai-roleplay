@@ -29,14 +29,6 @@ def init_db():
     if "call_speak" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_speak TEXT DEFAULT ''")
     if "call_desc" not in columns: cursor.execute("ALTER TABLE users ADD COLUMN call_desc TEXT DEFAULT ''")
 
-    # 🛡️ บังคับสร้างหรืออัปเดตบัญชีแอดมินเริ่มต้น (admin / admin) ให้ถูกต้องเสมอ
-    admin_pass_hashed = hashlib.sha256("admin".encode()).hexdigest()
-    cursor.execute("""
-        INSERT INTO users (username, password, is_admin, user_name) 
-        VALUES ('admin', ?, 1, 'Admin')
-        ON CONFLICT(username) DO UPDATE SET password = ?, is_admin = 1
-    """, (admin_pass_hashed, admin_pass_hashed))
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
