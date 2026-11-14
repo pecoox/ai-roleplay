@@ -247,7 +247,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         st.markdown("### 👥 จัดการตัวละครเสริม")
         if user_chars:
             sub_target_char = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="sub_char_sel")
-            sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "🗑️ ลบตัวละครเสริม"], key="sub_rad")
+            sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "✏️ แก้ไขตัวละครเสริม", "🗑️ ลบตัวละครเสริม"], key="sub_rad")
             
             if sub_action == "➕ เพิ่มตัวละครเสริม":
                 with st.form("add_sub_form", clear_on_submit=True):
@@ -260,6 +260,28 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                         conn.commit()
                         st.success("เพิ่มตัวละครเสริมสำเร็จ!")
                         st.rerun()
+            elif sub_action == "✏️ แก้ไขตัวละครเสริม":
+                cursor.execute("SELECT id, sub_name, sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE char_name = ?", (sub_target_char,))
+                sub_list = cursor.fetchall()
+                if sub_list:
+                    sub_dict = {s[1]: s[0] for s in sub_list}
+                    sel_sub_name = st.selectbox("เลือกตัวเสริมที่ต้องการแก้ไข:", list(sub_dict.keys()), key="edit_sub_sel_name")
+                    sel_sub_id = sub_dict[sel_sub_name]
+                    sub_info = next(s for s in sub_list if s[0] == sel_sub_id)
+
+                    with st.form("edit_sub_form"):
+                        e_s_name = st.text_input("ชื่อตัวละครเสริม:", value=sub_info[1])
+                        e_s_p = st.text_area("คาแรคเตอร์:", value=sub_info[2], height=70)
+                        e_s_pers = st.text_area("บุคลิก:", value=sub_info[3], height=70)
+                        e_s_l = st.text_area("เรื่องราว:", value=sub_info[4], height=70)
+
+                        if st.form_submit_button("💾 บันทึกการแก้ไขตัวเสริม", use_container_width=True):
+                            cursor.execute("UPDATE supporting_characters SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ? WHERE id = ?", (e_s_name, e_s_p, e_s_pers, e_s_l, sel_sub_id))
+                            conn.commit()
+                            st.success("แก้ไขตัวละครเสริมสำเร็จ!")
+                            st.rerun()
+                else:
+                    st.info("ยังไม่มีตัวละครเสริมในตัวละครนี้ให้แก้ไข")
             else:
                 cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = ?", (sub_target_char,))
                 sub_list = cursor.fetchall()
