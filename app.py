@@ -73,7 +73,6 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = l_user
                     st.session_state.is_admin = bool(1 if l_user.lower() == "admin" else row[1])
-                    # บันทึกสถานะลงใน Query Params เพื่อให้จำค่าได้หลังกด Refresh
                     st.query_params["user"] = l_user
                     st.rerun()
                 else:
@@ -124,7 +123,6 @@ with st.sidebar:
 
     sidebar_action = render_admin_sidebar(cursor, conn, all_chars, st.session_state.current_char, is_current_admin, current_user)
 
-    # กรองการแสดงผลตัวละครใน Sidebar ตามสิทธิ์ (Admin เห็นทั้งหมด, User เห็นเฉพาะที่ตัวเองสร้าง)
     if is_current_admin:
         manageable_chars = all_chars
     else:
@@ -149,19 +147,31 @@ if not st.session_state.in_chat:
     else:
         cols = st.columns(3)
         for idx, c_name in enumerate(all_chars):
-            cursor.execute("SELECT prompt, avatar FROM characters WHERE name = ?", (c_name,))
+            cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?", (c_name,))
             c_data = cursor.fetchone()
+            c_prompt, c_pers, c_lore, c_avatar_blob = c_data[0], c_data[1], c_data[2], c_data[3]
+            
             with cols[idx % 3]:
                 with st.container(border=True):
-                    if c_data and c_data[1]:
-                        st.image(Image.open(io.BytesIO(c_data[1])), use_container_width=True)
+                    if c_avatar_blob:
+                        st.image(Image.open(io.BytesIO(c_avatar_blob)), use_container_width=True)
                     else:
                         st.image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", use_container_width=True)
                     st.markdown(f"### 🌟 {c_name}")
-                    if st.button("✨ แชท", key=f"b_{c_name}", use_container_width=True):
-                        st.session_state.current_char = c_name
-                        st.session_state.in_chat = True
-                        st.rerun()
+                    
+                    # ปุ่มดูข้อมูลก่อนเข้าแชท และปุ่มเข้าแชท
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        with st.popover("📋 ข้อมูล", use_container_width=True):
+                            st.markdown(f"### 🌟 {c_name}")
+                            st.markdown(f"**🎭 คาแรคเตอร์:**\n{c_prompt}")
+                            st.markdown(f"**🧠 บุคลิก:**\n{c_pers}")
+                            st.markdown(f"**📜 เรื่องราว:**\n{c_lore}")
+                    with btn_col2:
+                        if st.button("✨ แชท", key=f"b_{c_name}", use_container_width=True):
+                            st.session_state.current_char = c_name
+                            st.session_state.in_chat = True
+                            st.rerun()
     st.stop()
 
 # 💬 ห้องแชท
@@ -243,7 +253,6 @@ if st.session_state.in_chat and st.session_state.current_char:
             raw_t = response.text
             clean_t = raw_t.split("{")[0].strip() if "{" in raw_t else raw_t.strip()
             
-            # สุ่มรูปภาพจากคลัง 30%
             attached_photo_bytes = None
             cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
             photos = cursor.fetchall()
