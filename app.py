@@ -34,66 +34,71 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 model_name = "gemini-3.5-flash-lite"
 
-# 🔄 ระบบจัดการ Session และ Query Params เพื่อกันหลุดเวลา Refresh หน้าเว็บ
-query_params = st.query_params
-
+# 🔄 ระบบจัดการ Session พื้นฐาน
 if "logged_in" not in st.session_state:
-    if "user" in query_params:
-        u_check = query_params["user"]
-        cursor.execute("SELECT username, is_admin FROM users WHERE username = ?", (u_check,))
-        row = cursor.fetchone()
-        if row:
-            st.session_state.logged_in = True
-            st.session_state.username = row[0]
-            st.session_state.is_admin = bool(1 if row[0].lower() == "admin" else row[1])
-        else:
-            st.session_state.logged_in = False
-            st.session_state.username = ""
-            st.session_state.is_admin = False
-    else:
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-        st.session_state.is_admin = False
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+if "in_chat" not in st.session_state:
+    st.session_state.in_chat = False
 
-if "in_chat" not in st.session_state: st.session_state.in_chat = False
-
-# 🔐 หน้าจอ Login
+# 🔐 หน้าจอ Login / Register (ถ้ายังไม่ล็อกอิน)
 if not st.session_state.logged_in:
     st.title("🌌 AI Roleplay - Universe Hub")
     tab1, tab2 = st.tabs(["🔑 เข้าสู่ระบบ", "📝 สมัครสมาชิก"])
+    
     with tab1:
         with st.form("login_form"):
-            l_user = st.text_input("Username")
-            l_pass = st.text_input("Password", type="password")
-            if st.form_submit_button("เข้าสู่ระบบ", use_container_width=True):
-                cursor.execute("SELECT password, is_admin FROM users WHERE username = ?", (l_user,))
-                row = cursor.fetchone()
-                if row and row[0] == hash_password(l_pass):
-                    st.session_state.logged_in = True
-                    st.session_state.username = l_user
-                    st.session_state.is_admin = bool(1 if l_user.lower() == "admin" else row[1])
-                    st.query_params["user"] = l_user
-                    st.success("เข้าสู่ระบบสำเร็จ!")
-                    st.rerun()
+            l_user = st.text_input("ชื่อผู้ใช้ (Username)")
+            l_pass = st.text_input("รหัสผ่าน (Password)", type="password")
+            l_submit = st.form_submit_button("เข้าสู่ระบบ", use_container_width=True)
+
+            if l_submit:
+                if l_user and l_pass:
+                    cursor.execute("SELECT password, is_admin FROM users WHERE username = ?", (l_user,))
+                    row = cursor.fetchone()
+                    if row and row[0] == hash_password(l_pass):
+                        st.session_state.logged_in = True
+                        st.session_state.username = l_user
+                        st.session_state.is_admin = bool(1 if l_user.lower() == "admin" else row[1])
+                        st.success("เข้าสู่ระบบสำเร็จ!")
+                        st.rerun()
+                    else:
+                        st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
                 else:
-                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+                    st.warning("กรุณากรอกข้อมูลให้ครบถ้วน")
+
     with tab2:
         with st.form("register_form"):
-            r_user = st.text_input("ตั้ง Username")
-            r_pass = st.text_input("ตั้ง Password", type="password")
-            if st.form_submit_button("สมัครสมาชิก", use_container_width=True):
+            r_user = st.text_input("ตั้งชื่อผู้ใช้ (Username)")
+            r_pass = st.text_input("ตั้งรหัสผ่าน (Password)", type="password")
+            r_submit = st.form_submit_button("สมัครสมาชิก", use_container_width=True)
+
+            if r_submit:
                 if r_user and r_pass:
                     cursor.execute("SELECT username FROM users WHERE username = ?", (r_user,))
                     if cursor.fetchone():
                         st.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
                     else:
                         cursor.execute("SELECT COUNT(*) FROM users")
-                        assigned_admin = 1 if (r_user.lower() == "admin" or cursor.fetchone()[0] == 0) else 0
-                        cursor.execute("INSERT INTO users (username, password, is_admin, user_name) VALUES (?, ?, ?, ?)", (r_user, hash_password(r_pass), assigned_admin, r_user))
+                        user_count = cursor.fetchone()[0]
+                        assigned_admin = 1 if (r_user.lower() == "admin" or user_count == 0) else 0
+
+                        cursor.execute("""
+                            INSERT INTO users (username, password, is_admin, user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (r_user, hash_password(r_pass), assigned_admin, r_user, "เป็นผู้เดินทางในจักรวาลนี้", "ผม / ฉัน", "เธอ / เขา", "คุณ", "เขา"))
                         conn.commit()
-                        st.success("สมัครสมาชิกสำเร็จ! กรุณาไปที่แท็บเข้าสู่ระบบ")
+                        st.success("สมัครสมาชิกสำเร็จ! กรุณากลับไปที่แท็บ 'เข้าสู่ระบบ'")
+                else:
+                    st.warning("กรุณากรอกข้อมูลให้ครบถ้วน")
     st.stop()
 
+# ==========================================
+# 🌟 ระบบหลักหลังเข้าสู่ระบบแล้ว
+# ==========================================
 current_user = st.session_state.username
 if current_user.lower() == "admin": st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
@@ -134,7 +139,6 @@ with st.sidebar:
         st.session_state.username = ""
         st.session_state.is_admin = False
         st.session_state.in_chat = False
-        if "user" in st.query_params: del st.query_params["user"]
         st.rerun()
 
     if st.button("🏠 กลับสู่หน้าแรก", use_container_width=True):
@@ -279,7 +283,6 @@ if st.session_state.in_chat and st.session_state.current_char:
             conn.commit()
             st.rerun()
 
-    # 🛡️ [Admin Feature] ปุ่ม AI กรรมการตรวจสอบบทบาทและทดสอบ AI ตัวต่อตัว
     if is_current_admin:
         with st.expander("🛡️ [Admin Sandbox & Auditor] AI กรรมการตรวจสอบและจำลองบทบาท"):
             st.caption("คลิกปุ่มด้านล่างเพื่อให้ AI กรรมการอิสระ ทำการตรวจสอบบทสนทนาย้อนหลัง วิเคราะห์การเข้าคาแรคเตอร์ และแนะนำแนวทางแก้ปัญหาทันที")
