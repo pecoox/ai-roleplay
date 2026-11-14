@@ -7,7 +7,7 @@ from PIL import Image
 import io
 import time
 
-SYSTEM_VERSION = "v2.9.0-AuditMaster"
+SYSTEM_VERSION = "v2.9.1-Fixed"
 BUILD_DATE = "2026-11-14"
 
 def run_with_timer(title_text, total_seconds=5):
