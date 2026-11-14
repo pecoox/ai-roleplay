@@ -193,18 +193,21 @@ if st.session_state.in_chat and st.session_state.current_char:
 
     cursor.execute("SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     mem_row = cursor.fetchone()
-    long_term_memory = mem_row[0] if mem_row else "ยังไม่มีเหตุการณ์สำคัญสะสม"
+    long_term_memory = mem_row[0] if mem_row else "ยังไม่มีเหตุการณ์สำคัญสะสม เริ่มต้นเรื่องราวใหม่"
 
     roleplay_instruction = f"""
 คุณคือนักเขียนนิยายโรแมนติก/ดราม่ามืออาชีพ และผู้สวมบทบาทตัวละคร '{st.session_state.current_char}'
 - คาแรคเตอร์หลัก: {base_prompt} | นิสัย: {char_personality}
+- เรื่องราวพื้นหลัง (Lore): {char_lore}
 - ตัวละครเสริมในฉาก: {supporting_text}
-- ความทรงจำระยะยาว: "{long_term_memory}"
-- ผู้สนทนา: {u_name} | ความสัมพันธ์: {current_rel_level} ({current_affection} แต้ม)
-กฎบังคับ:
-1. บรรยายท่าทางให้อยู่ใน *...* และบทพูดใน "..."
-2. บรรทัดสุดท้ายสุดของข้อความทั้งหมด ต้องส่งออกเป็น JSON รูปแบบนี้เป๊ะๆ (ห้ามมีข้อความอื่นต่อท้าย):
-{{"score_change": 2, "quest_update": null, "memory_update": "[สรุปสั้นๆ]"}}
+- ความทรงจำระยะยาว (Memory Vault): "{long_term_memory}"
+- ผู้สนทนา: {u_name} | ประวัติ: {u_persona} | ความสัมพันธ์: {current_rel_level} ({current_affection} แต้ม)
+
+กฎการเขียนบทบาท:
+1. บรรยายท่าทาง แววตา จิตวิทยา บรรยากาศ ให้อยู่ใน *...* (แสดงผลสีเทาอ่อน ตัวตรงปกติ) และบทพูดใน "..."
+2. ดึงตัวละครเสริมหรือความทรงจำมาร่วมสร้างอภิปรายในฉากอย่างสมจริง
+3. บรรทัดสุดท้ายสุดของข้อความ ต้องส่งออกเป็น JSON รูปแบบนี้เป๊ะๆ (ห้ามมีข้อความอื่นต่อท้าย):
+{{"score_change": 2, "quest_update": null, "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค]"}}
 """
 
     def get_random_first_msg(raw_json):
@@ -212,7 +215,7 @@ if st.session_state.in_chat and st.session_state.current_char:
             msgs = json.loads(raw_json)
             if msgs: return random.choice(msgs)
         except: pass
-        return "*ปรายตามองคุณ* \"มีธุระอะไร?\""
+        return "*ปรายตามองคุณด้วยความเรียบเฉย* \"มีธุระอะไร?\""
 
     cursor.execute("SELECT COUNT(*) FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
     if cursor.fetchone()[0] == 0:
@@ -247,35 +250,60 @@ if st.session_state.in_chat and st.session_state.current_char:
                         st.markdown("### 📜 ตอนนิยายของคุณ:")
                         st.write(novel_res.text)
 
-    st.markdown(f'<div class="affection-badge">💖 ความสัมพันธ์: {current_rel_level} | แต้มความสนิท: {current_affection} คะแนน</div>', unsafe_allow_html=True)
-
-    with st.expander("🎯 ภารกิจปัจจุบัน (Quest Log)"):
-        cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?", (st.session_state.current_char,))
-        quests = cursor.fetchall()
-        if quests:
-            for q_id, q_desc, q_pts in quests:
-                cursor.execute("SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?", (current_user, q_id))
-                uq = cursor.fetchone()
-                is_comp = uq[0] if uq else 0
-                status_icon = "✅" if is_comp else "⏳"
-                st.markdown(f"- {status_icon} **[#{q_id}] {q_desc}** *(รางวัล: {q_pts} แต้ม)*")
-        else:
-            st.info("ยังไม่มีภารกิจสำหรับตัวละครนี้")
-
-    st.divider()
+    # 🛡️ [Admin Panel Feature] ระบบ AI กรรมการตรวจบทบาทในห้องแชท
+    if is_current_admin:
+        with st.expander("🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาทแบบละเอียด"):
+            if st.button("🧪 รัน AI กรรมการตรวจบทบาทปัจจุบัน", use_container_width=True):
+                run_with_timer("AI กรรมการกำลังตรวจสอบบทสนทนาและจิตวิทยา", 5)
+                try:
+                    recent_chat_log = "\n".join([f"{m['role']}: {m['content']}" for m in current_messages[-6:]])
+                    audit_prompt = f"ตรวจสอบบทบาทตัวละคร '{st.session_state.current_char}' จากแชทล่าสุด:\n{recent_chat_log}\nให้คะแนนความเข้าบทบาท (0-10) พร้อมวิเคราะห์สั้นๆ"
+                    audit_res = client.models.generate_content(model=model_name, contents=audit_prompt)
+                    st.info(audit_res.text)
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาด: {e}")
 
     for message in current_messages:
-        with st.chat_message("user" if message["role"] == "user" else "assistant", avatar="👤" if message["role"] == "user" else (char_avatar_img or "✨")):
-            st.markdown(message["content"])
-            if message["image"]: st.image(message["image"], width=280)
+        if message["role"] == "user":
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(message["content"])
+        else:
+            with st.chat_message("assistant", avatar=char_avatar_img or "✨"):
+                col_badge, col_pop = st.columns([4, 1.2])
+                with col_badge:
+                    st.markdown(f'<div class="affection-badge">💖 ความสัมพันธ์: {current_rel_level} | คะแนน: {current_affection} แต้ม</div>', unsafe_allow_html=True)
+                with col_pop:
+                    with st.popover("🎯 ภารกิจ", use_container_width=True):
+                        st.markdown("#### 🎯 ภารกิจปัจจุบัน")
+                        cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?", (st.session_state.current_char,))
+                        quests_in_db = cursor.fetchall()
+                        if quests_in_db:
+                            for q_id, desc, pts in quests_in_db:
+                                cursor.execute("SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?", (current_user, q_id))
+                                uq = cursor.fetchone()
+                                is_comp = uq[0] if uq else 0
+                                status_icon = "✅" if is_comp else "⏳"
+                                st.markdown(f"- {status_icon} **[#{q_id}] {desc}** *(+{pts} แต้ม)*")
+                        else:
+                            st.caption("ยังไม่มีภารกิจ")
+                st.markdown(message["content"])
+                if message["image"]: st.image(message["image"], width=280)
 
     if user_input := st.chat_input(f"ส่งข้อความหา {st.session_state.current_char}..."):
         cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'user', ?)", (current_user, st.session_state.current_char, user_input))
         conn.commit()
         
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_input)
+
         with st.chat_message("assistant", avatar=char_avatar_img or "✨"):
+            message_placeholder = st.empty()
+            message_placeholder.markdown("กำลังประพันธ์เนื้อเรื่อง...")
+            
             try:
-                response = client.chats.create(model=model_name, config={"system_instruction": roleplay_instruction}).send_message(user_input)
+                formatted_history = [{"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]} for m in current_messages]
+                chat = client.chats.create(model=model_name, history=formatted_history if formatted_history else None, config={"system_instruction": roleplay_instruction})
+                response = chat.send_message(user_input)
                 raw_t = response.text
                 
                 if "{" in raw_t and "}" in raw_t:
@@ -292,7 +320,7 @@ if st.session_state.in_chat and st.session_state.current_char:
                         cursor.execute("UPDATE character_status SET affection_score = ?, relationship_level = ? WHERE username = ? AND char_name = ?", (new_score, new_level, current_user, st.session_state.current_char))
                         
                         if memory_update:
-                            updated_memory_vault = f"{long_term_memory} -> {memory_update}" if long_term_memory != "ยังไม่มีเหตุการณ์สำคัญสะสม" else memory_update
+                            updated_memory_vault = f"{long_term_memory} -> {memory_update}" if long_term_memory != "ยังไม่มีเหตุการณ์สำคัญสะสม เริ่มต้นเรื่องราวใหม่" else memory_update
                             cursor.execute("INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)", (current_user, st.session_state.current_char, updated_memory_vault))
                         
                         if completed_q_id:
@@ -304,7 +332,7 @@ if st.session_state.in_chat and st.session_state.current_char:
                 else:
                     clean_t = raw_t.strip()
             except Exception as e:
-                clean_t = "*เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองส่งใหม่อีกครั้ง*"
+                clean_t = f"*เกิดข้อผิดพลาดในการเชื่อมต่อ: {e}*"
 
             attached_photo_bytes = None
             cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
@@ -313,7 +341,7 @@ if st.session_state.in_chat and st.session_state.current_char:
                 attached_photo_bytes = random.choice(photos)[0]
                 st.image(Image.open(io.BytesIO(attached_photo_bytes)), width=280)
 
-            st.markdown(clean_t)
+            message_placeholder.markdown(clean_t)
             cursor.execute("INSERT INTO messages (username, char_name, role, content, image_blob) VALUES (?, ?, 'assistant', ?, ?)", (current_user, st.session_state.current_char, clean_t, attached_photo_bytes))
             conn.commit()
         st.rerun()
