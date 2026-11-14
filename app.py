@@ -200,12 +200,12 @@ if st.session_state.in_chat and st.session_state.current_char:
 - คาแรคเตอร์หลัก: {base_prompt} | นิสัย: {char_personality}
 - เรื่องราวพื้นหลัง (Lore): {char_lore}
 - ตัวละครเสริมในฉาก: {supporting_text}
-- ความทรงจำระยะยาว (Memory Vault): "{long_term_memory}"
+- ความทรงจำระยะยาว (Smart Memory Vault): "{long_term_memory}"
 - ผู้สนทนา: {u_name} | ประวัติ: {u_persona} | ความสัมพันธ์: {current_rel_level} ({current_affection} แต้ม)
 
 กฎการเขียนบทบาท:
 1. บรรยายท่าทาง แววตา จิตวิทยา บรรยากาศ ให้อยู่ใน *...* (แสดงผลสีเทาอ่อน ตัวตรงปกติ) และบทพูดใน "..."
-2. ดึงตัวละครเสริมหรือความทรงจำมาร่วมสร้างอภิปรายในฉากอย่างสมจริง
+2. ดึงตัวละครเสริมหรือความทรงจำมาร่วมสร้างบทบาทในฉากอย่างสมจริง
 3. บรรทัดสุดท้ายสุดของข้อความ ต้องส่งออกเป็น JSON รูปแบบนี้เป๊ะๆ (ห้ามมีข้อความอื่นต่อท้าย):
 {{"score_change": 2, "quest_update": null, "memory_update": "[สรุปเหตุการณ์สำคัญสั้นๆ 1 ประโยค]"}}
 """
@@ -250,7 +250,6 @@ if st.session_state.in_chat and st.session_state.current_char:
                         st.markdown("### 📜 ตอนนิยายของคุณ:")
                         st.write(novel_res.text)
 
-    # 🛡️ [Admin Panel Feature] ระบบ AI กรรมการตรวจบทบาทในห้องแชท
     if is_current_admin:
         with st.expander("🛡️ [Admin Panel] AI กรรมการตรวจและประเมินบทบาทแบบละเอียด"):
             if st.button("🧪 รัน AI กรรมการตรวจบทบาทปัจจุบัน", use_container_width=True):
