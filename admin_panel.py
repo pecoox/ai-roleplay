@@ -255,13 +255,16 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     s_p = st.text_area("คาแรคเตอร์:")
                     s_pers = st.text_area("บุคลิก:")
                     s_l = st.text_area("เรื่องราว:")
+                    s_avatar = st.file_uploader("รูปภาพตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"], key="add_sub_img")
+
                     if st.form_submit_button("➕ บันทึกตัวเสริม", use_container_width=True) and s_name:
-                        cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)", (sub_target_char, s_name, s_p, s_pers, s_l))
+                        s_avatar_bytes = s_avatar.getvalue() if s_avatar is not None else None
+                        cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore, sub_avatar) VALUES (?, ?, ?, ?, ?, ?)", (sub_target_char, s_name, s_p, s_pers, s_l, s_avatar_bytes))
                         conn.commit()
                         st.success("เพิ่มตัวละครเสริมสำเร็จ!")
                         st.rerun()
             elif sub_action == "✏️ แก้ไขตัวละครเสริม":
-                cursor.execute("SELECT id, sub_name, sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE char_name = ?", (sub_target_char,))
+                cursor.execute("SELECT id, sub_name, sub_prompt, sub_personality, sub_lore, sub_avatar FROM supporting_characters WHERE char_name = ?", (sub_target_char,))
                 sub_list = cursor.fetchall()
                 if sub_list:
                     sub_dict = {s[1]: s[0] for s in sub_list}
@@ -274,9 +277,11 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                         e_s_p = st.text_area("คาแรคเตอร์:", value=sub_info[2], height=70)
                         e_s_pers = st.text_area("บุคลิก:", value=sub_info[3], height=70)
                         e_s_l = st.text_area("เรื่องราว:", value=sub_info[4], height=70)
+                        e_s_avatar = st.file_uploader("เปลี่ยนรูปภาพตัวละครเสริม", type=["png", "jpg", "jpeg", "webp"], key="edit_sub_img")
 
                         if st.form_submit_button("💾 บันทึกการแก้ไขตัวเสริม", use_container_width=True):
-                            cursor.execute("UPDATE supporting_characters SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ? WHERE id = ?", (e_s_name, e_s_p, e_s_pers, e_s_l, sel_sub_id))
+                            new_s_avatar_bytes = e_s_avatar.getvalue() if e_s_avatar is not None else sub_info[5]
+                            cursor.execute("UPDATE supporting_characters SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ?, sub_avatar = ? WHERE id = ?", (e_s_name, e_s_p, e_s_pers, e_s_l, new_s_avatar_bytes, sel_sub_id))
                             conn.commit()
                             st.success("แก้ไขตัวละครเสริมสำเร็จ!")
                             st.rerun()
