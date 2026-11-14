@@ -44,7 +44,7 @@ if "is_admin" not in st.session_state:
 if "in_chat" not in st.session_state:
     st.session_state.in_chat = False
 
-# 🔐 หน้าจอ Login / Register (ถ้ายังไม่ล็อกอิน)
+# 🔐 หน้าจอ Login / Register
 if not st.session_state.logged_in:
     st.title("🌌 AI Roleplay - Universe Hub")
     tab1, tab2 = st.tabs(["🔑 เข้าสู่ระบบ", "📝 สมัครสมาชิก"])
@@ -107,6 +107,7 @@ cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, cal
 p_row = cursor.fetchone()
 u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
 
+# 📌 ดึงรายชื่อตัวละครทั้งหมดจากฐานข้อมูลเสมอก่อนเรนเดอร์
 cursor.execute("SELECT name FROM characters")
 all_chars = [row[0] for row in cursor.fetchall()]
 
@@ -154,7 +155,7 @@ if not st.session_state.in_chat:
     st.title("🔥 จักรวาลยอดนิยม & ตัวละครทั้งหมด")
     st.divider()
     if not all_chars:
-        st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักก่อนครับ")
+        st.info("📭 ยังไม่มีตัวละครในระบบ กรุณาสร้างตัวละครหลักผ่านเมนูด้านข้างก่อนครับ")
     else:
         cols = st.columns(3)
         for idx, c_name in enumerate(all_chars):
