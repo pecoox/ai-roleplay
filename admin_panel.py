@@ -29,7 +29,7 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
 
 def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, client, model_name, current_user, is_admin):
     
-    # ฟังก์ชันช่วยดึงรายชื่อตัวละครตามสิทธิ์ (Admin เห็นทั้งหมด, User เห็นเฉพาะที่ตัวเองสร้าง)
+    # ฟังก์ชันดึงเฉพาะตัวละครที่ผู้ใช้มีสิทธิ์จัดการ
     def get_manageable_chars():
         if is_admin:
             return all_chars
@@ -174,7 +174,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
     elif sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก":
         st.markdown("### ✏️ แก้ไขข้อมูลตัวละครหลัก")
         if user_chars:
-            edit_target = st.selectbox("เลือกตัวละครที่ต้องการแก้ไข:", user_chars, key="edit_target_sel")
+            edit_target = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="edit_target_sel")
             cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = ?", (edit_target,))
             e_data = cursor.fetchone()
             if e_data:
@@ -188,12 +188,12 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                         st.success("บันทึกการแก้ไขสำเร็จ!")
                         st.rerun()
         else:
-            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของให้แก้ไข")
+            st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "🗑️ ลบตัวละครหลัก":
         st.markdown("### 🗑️ ลบตัวละครหลัก")
         if user_chars:
-            del_target = st.selectbox("เลือกตัวละครที่ต้องการลบ:", user_chars, key="del_target_sel")
+            del_target = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="del_target_sel")
             if st.button("🗑️ ยืนยันการลบตัวละครนี้", use_container_width=True):
                 cursor.execute("DELETE FROM characters WHERE name = ?", (del_target,))
                 cursor.execute("DELETE FROM supporting_characters WHERE char_name = ?", (del_target,))
@@ -207,12 +207,12 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 st.session_state.in_chat = False
                 st.rerun()
         else:
-            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของให้ลบ")
+            st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "👥 จัดการตัวละครเสริม":
         st.markdown("### 👥 จัดการตัวละครเสริม")
         if user_chars:
-            sub_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="sub_char_sel")
+            sub_target_char = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="sub_char_sel")
             sub_action = st.radio("เลือกการทำงาน:", ["➕ เพิ่มตัวละครเสริม", "🗑️ ลบตัวละครเสริม"], key="sub_rad")
             
             if sub_action == "➕ เพิ่มตัวละครเสริม":
@@ -240,12 +240,12 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 else:
                     st.info("ยังไม่มีตัวละครเสริมในตัวละครนี้")
         else:
-            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+            st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "🎯 จัดการภารกิจ (Quest Log)":
         st.markdown("### 🎯 จัดการภารกิจ (Quest Log)")
         if user_chars:
-            q_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="q_char_sel")
+            q_target_char = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="q_char_sel")
             with st.form("add_q_form", clear_on_submit=True):
                 q_desc = st.text_input("รายละเอียดภารกิจใหม่:")
                 q_pts = st.slider("คะแนนรางวัล:", 5, 100, 15)
@@ -255,12 +255,12 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     st.success("เพิ่มภารกิจสำเร็จ!")
                     st.rerun()
         else:
-            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+            st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "🖼️ จัดการคลังรูปภาพ":
         st.markdown("### 🖼️ จัดการคลังรูปภาพ")
         if user_chars:
-            img_target_char = st.selectbox("เลือกตัวละครหลัก:", user_chars, key="img_char_sel")
+            img_target_char = st.selectbox("เลือกตัวละครของฉัน:", user_chars, key="img_char_sel")
             with st.form(f"upload_photo_form_{img_target_char}", clear_on_submit=True):
                 new_photos = st.file_uploader("อัปโหลดรูปภาพเข้าคลัง:", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
                 if st.form_submit_button("📥 บันทึกรูปลงคลัง", use_container_width=True) and new_photos:
@@ -285,7 +285,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                                 conn.commit()
                                 st.rerun()
         else:
-            st.info("คุณยังไม่มีตัวละครที่เป็นเจ้าของ")
+            st.info("คุณยังไม่ได้สร้างตัวละครส่วนตัว")
 
     elif sidebar_action == "👥 จัดการผู้ใช้งานระบบ" and is_admin:
         st.markdown("### 👥 รายชื่อผู้ใช้งานทั้งหมด")
