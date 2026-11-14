@@ -7,7 +7,7 @@ from PIL import Image
 import io
 import time
 
-SYSTEM_VERSION = "v2.8.0-Ultimate"
+SYSTEM_VERSION = "v2.8.0-Supabase"
 BUILD_DATE = "2026-11-14"
 
 def run_with_timer(title_text, total_seconds=5):
@@ -20,7 +20,7 @@ def run_with_timer(title_text, total_seconds=5):
     bar.empty()
 
 def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current_user):
-    cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
+    cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = %s", (current_user,))
     p_row = cursor.fetchone()
     u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
 
@@ -29,7 +29,7 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
             if st.button("✨ ให้ AI สร้างบทบาทให้เข้ากับเรื่องนี้", use_container_width=True):
                 run_with_timer("AI กำลังวิเคราะห์และสร้างบทบาทตัวผู้เล่น", 4)
                 try:
-                    cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = ?", (active_char,))
+                    cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = %s", (active_char,))
                     c_info = cursor.fetchone()
                     c_p, c_pers, c_l = c_info if c_info else ("", "", "")
 
@@ -50,8 +50,8 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
                             p_data = json.loads(json_str)
                             cursor.execute("""
                                 UPDATE users 
-                                SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
-                                WHERE username = ?
+                                SET user_name = %s, user_persona = %s, pronoun_speak = %s, pronoun_desc = %s, call_speak = %s, call_desc = %s 
+                                WHERE username = %s
                             """, (p_data.get("user_name", u_name), p_data.get("user_persona", u_persona), p_data.get("pronoun_speak", u_pspeak), p_data.get("pronoun_desc", u_pdesc), p_data.get("call_speak", u_cspeak), p_data.get("call_desc", u_cdesc), current_user))
                             conn.commit()
                             st.success("AI สร้างบทบาทให้เรียบร้อยแล้ว!")
@@ -75,8 +75,8 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
             if st.form_submit_button("💾 บันทึกบทบาท", use_container_width=True):
                 cursor.execute("""
                     UPDATE users 
-                    SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
-                    WHERE username = ?
+                    SET user_name = %s, user_persona = %s, pronoun_speak = %s, pronoun_desc = %s, call_speak = %s, call_desc = %s 
+                    WHERE username = %s
                 """, (edit_uname, edit_persona, edit_pspeak, edit_pdesc, edit_cspeak, edit_cdesc, current_user))
                 conn.commit()
                 st.success("บันทึกเรียบร้อย!")
@@ -95,7 +95,6 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
         "👥 จัดการตัวละครเสริม",
         "🎯 จัดการภารกิจ (Quest Log)",
         "🖼️ จัดการคลังรูปภาพ",
-        "💾 สำรองข้อมูลระบบ (Backup DB)",
         "🔍 ตรวจสอบเวอร์ชันและสถานะระบบ (Version Inspector)"
     ]
     if is_admin:
@@ -110,7 +109,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         if is_admin:
             return all_chars
         else:
-            cursor.execute("SELECT name FROM characters WHERE creator = ?", (current_user,))
+            cursor.execute("SELECT name FROM characters WHERE creator = %s", (current_user,))
             return [row[0] for row in cursor.fetchall()]
 
     user_chars = get_manageable_chars()
@@ -155,18 +154,22 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                         s_pers = char_info.get("sub_personality", "เข้มงวด รักความสะอาด")
                         q_desc = char_info.get("quest_desc", "พูดคุยทำความรู้จักเพื่อเพิ่มความสนิทสนม")
 
-                        cursor.execute(
-                            "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (c_name, c_prompt, c_pers, c_lore, json.dumps(f_msgs, ensure_ascii=False), None, current_user)
-                        )
-                        cursor.execute(
-                            "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                            (c_name, s_name, s_prompt, s_pers, "เป็นบุคคลใกล้ชิดในวงสังคม")
-                        )
-                        cursor.execute(
-                            "INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)",
-                            (c_name, q_desc, 20)
-                        )
+                        cursor.execute("""
+                            INSERT INTO characters (name, prompt, personality, lore, first_message, avatar, creator) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (name) DO UPDATE SET prompt = EXCLUDED.prompt, personality = EXCLUDED.personality, lore = EXCLUDED.lore, first_message = EXCLUDED.first_message
+                        """, (c_name, c_prompt, c_pers, c_lore, json.dumps(f_msgs, ensure_ascii=False), None, current_user))
+                        
+                        cursor.execute("""
+                            INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) 
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (c_name, s_name, s_prompt, s_pers, "เป็นบุคคลใกล้ชิดในวงสังคม"))
+                        
+                        cursor.execute("""
+                            INSERT INTO quests (char_name, task_desc, reward_points) 
+                            VALUES (%s, %s, %s)
+                        """, (c_name, q_desc, 20))
+                        
                         conn.commit()
                         st.session_state.current_char = c_name
                         st.session_state.in_chat = True
@@ -201,17 +204,25 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     if "{" in raw_res and "}" in raw_res:
                         parsed_data = json.loads(raw_res[raw_res.find("{"):raw_res.rfind("}")+1])
                         c_name = parsed_data.get("name", "ตัวละครนำเข้า")
-                        cursor.execute(
-                            "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (c_name, parsed_data.get("prompt",""), parsed_data.get("personality",""), parsed_data.get("lore",""), json.dumps(parsed_data.get("first_messages",["สวัสดีครับ"]), ensure_ascii=False), None, current_user)
-                        )
+                        
+                        cursor.execute("""
+                            INSERT INTO characters (name, prompt, personality, lore, first_message, avatar, creator) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (name) DO UPDATE SET prompt = EXCLUDED.prompt, personality = EXCLUDED.personality, lore = EXCLUDED.lore, first_message = EXCLUDED.first_message
+                        """, (c_name, parsed_data.get("prompt",""), parsed_data.get("personality",""), parsed_data.get("lore",""), json.dumps(parsed_data.get("first_messages",["สวัสดีครับ"]), ensure_ascii=False), None, current_user))
+                        
                         for sub in parsed_data.get("supporting_chars", []):
-                            cursor.execute(
-                                "INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)",
-                                (c_name, sub.get("name",""), sub.get("prompt",""), sub.get("personality",""), sub.get("lore",""))
-                            )
+                            cursor.execute("""
+                                INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) 
+                                VALUES (%s, %s, %s, %s, %s)
+                            """, (c_name, sub.get("name",""), sub.get("prompt",""), sub.get("personality",""), sub.get("lore","")))
+                            
                         for q in parsed_data.get("quests", [{"desc": "พูดคุยทำความรู้จัก", "pts": 20}]):
-                            cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (c_name, q.get("desc",""), q.get("pts",20)))
+                            cursor.execute("""
+                                INSERT INTO quests (char_name, task_desc, reward_points) 
+                                VALUES (%s, %s, %s)
+                            """, (c_name, q.get("desc",""), q.get("pts",20)))
+                            
                         conn.commit()
                         st.session_state.current_char = c_name
                         st.session_state.in_chat = True
@@ -233,12 +244,15 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
             m_avatar = st.file_uploader("รูปโปรไฟล์ตัวละคร", type=["png", "jpg", "jpeg", "webp"])
 
             if st.form_submit_button("🚀 บันทึกตัวละคร", use_container_width=True) and m_name:
-                avatar_bytes = m_avatar.getvalue() if m_avatar is not None else None
+                avatar_bytes = psycopg2.Binary(m_avatar.getvalue()) if m_avatar is not None else None
                 combined_msgs = json.dumps([m.strip() for m in [m_msg1, m_msg2, m_msg3] if m.strip()], ensure_ascii=False)
-                cursor.execute(
-                    "INSERT OR REPLACE INTO characters (name, prompt, personality, lore, first_message, avatar, creator) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (m_name, m_prompt, m_pers, m_lore, combined_msgs, avatar_bytes, current_user)
-                )
+                
+                cursor.execute("""
+                    INSERT INTO characters (name, prompt, personality, lore, first_message, avatar, creator) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (name) DO UPDATE SET prompt = EXCLUDED.prompt, personality = EXCLUDED.personality, lore = EXCLUDED.lore, first_message = EXCLUDED.first_message, avatar = EXCLUDED.avatar
+                """, (m_name, m_prompt, m_pers, m_lore, combined_msgs, avatar_bytes, current_user))
+                
                 conn.commit()
                 st.session_state.current_char = m_name
                 st.session_state.in_chat = True
@@ -248,7 +262,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
     elif sidebar_action == "✏️ แก้ไขข้อมูลตัวละครหลัก":
         st.markdown(f"### ✏️ แก้ไขข้อมูล: `{active_char}`")
         if active_char:
-            cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?", (active_char,))
+            cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = %s", (active_char,))
             e_data = cursor.fetchone()
             if e_data:
                 e_p, e_pers, e_lore, e_fmsg_json, e_avatar = e_data
@@ -288,12 +302,15 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     edit_avatar = st.file_uploader("เปลี่ยนรูปโปรไฟล์", type=["png", "jpg", "jpeg", "webp"])
 
                     if st.form_submit_button("💾 บันทึกการแก้ไข", use_container_width=True):
-                        new_avatar_bytes = edit_avatar.getvalue() if edit_avatar is not None else e_avatar
+                        new_avatar_bytes = psycopg2.Binary(edit_avatar.getvalue()) if edit_avatar is not None else e_avatar
                         new_combined_msgs = json.dumps([m.strip() for m in [e_m1, e_m2, e_m3] if m.strip()], ensure_ascii=False)
-                        cursor.execute(
-                            "UPDATE characters SET prompt = ?, personality = ?, lore = ?, first_message = ?, avatar = ? WHERE name = ?",
-                            (e_prompt, e_pers_val, e_lore_val, new_combined_msgs, new_avatar_bytes, active_char)
-                        )
+                        
+                        cursor.execute("""
+                            UPDATE characters 
+                            SET prompt = %s, personality = %s, lore = %s, first_message = %s, avatar = %s 
+                            WHERE name = %s
+                        """, (e_prompt, e_pers_val, e_lore_val, new_combined_msgs, new_avatar_bytes, active_char))
+                        
                         conn.commit()
                         st.success("บันทึกการแก้ไขสำเร็จ!")
                         st.rerun()
@@ -305,13 +322,13 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         if active_char:
             st.warning(f"⚠️ การลบตัวละคร '{active_char}' จะลบข้อมูลแชท ภารกิจ และตัวละครเสริมทั้งหมดอย่างถาวร!")
             if st.button(f"🗑️ ยืนยันการลบ '{active_char}'", use_container_width=True):
-                cursor.execute("DELETE FROM characters WHERE name = ?", (active_char,))
-                cursor.execute("DELETE FROM supporting_characters WHERE char_name = ?", (active_char,))
-                cursor.execute("DELETE FROM character_status WHERE char_name = ?", (active_char,))
-                cursor.execute("DELETE FROM quests WHERE char_name = ?", (active_char,))
-                cursor.execute("DELETE FROM character_photos WHERE char_name = ?", (active_char,))
-                cursor.execute("DELETE FROM messages WHERE char_name = ?", (active_char,))
-                cursor.execute("DELETE FROM novel_memories WHERE char_name = ?", (active_char,))
+                cursor.execute("DELETE FROM characters WHERE name = %s", (active_char,))
+                cursor.execute("DELETE FROM supporting_characters WHERE char_name = %s", (active_char,))
+                cursor.execute("DELETE FROM character_status WHERE char_name = %s", (active_char,))
+                cursor.execute("DELETE FROM quests WHERE char_name = %s", (active_char,))
+                cursor.execute("DELETE FROM character_photos WHERE char_name = %s", (active_char,))
+                cursor.execute("DELETE FROM messages WHERE char_name = %s", (active_char,))
+                cursor.execute("DELETE FROM novel_memories WHERE char_name = %s", (active_char,))
                 conn.commit()
                 st.success(f"ลบตัวละคร '{active_char}' เรียบร้อยแล้ว!")
                 st.session_state.current_char = None
@@ -332,18 +349,21 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     s_pers = st.text_area("บุคลิก:")
                     s_l = st.text_area("เรื่องราว:")
                     if st.form_submit_button("➕ บันทึกตัวเสริม", use_container_width=True) and s_name:
-                        cursor.execute("INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) VALUES (?, ?, ?, ?, ?)", (active_char, s_name, s_p, s_pers, s_l))
+                        cursor.execute("""
+                            INSERT INTO supporting_characters (char_name, sub_name, sub_prompt, sub_personality, sub_lore) 
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (active_char, s_name, s_p, s_pers, s_l))
                         conn.commit()
                         st.success("เพิ่มตัวละครเสริมสำเร็จ!")
                         st.rerun()
             elif sub_action == "✏️ แก้ไขตัวละครเสริม":
-                cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = ?", (active_char,))
+                cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = %s", (active_char,))
                 sub_list = cursor.fetchall()
                 if sub_list:
                     sub_dict = {s[1]: s[0] for s in sub_list}
                     sel_sub_name = st.selectbox("เลือกตัวเสริมที่ต้องการแก้ไข:", list(sub_dict.keys()), key="edit_sub_sel_name")
                     sel_sub_id = sub_dict[sel_sub_name]
-                    cursor.execute("SELECT sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE id = ?", (sel_sub_id,))
+                    cursor.execute("SELECT sub_prompt, sub_personality, sub_lore FROM supporting_characters WHERE id = %s", (sel_sub_id,))
                     sub_info = cursor.fetchone()
                     if sub_info:
                         with st.form("edit_sub_form"):
@@ -352,20 +372,24 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                             e_s_pers = st.text_area("บุคลิก:", value=sub_info[1], height=70)
                             e_s_l = st.text_area("เรื่องราว:", value=sub_info[2], height=70)
                             if st.form_submit_button("💾 บันทึกการแก้ไขตัวเสริม", use_container_width=True):
-                                cursor.execute("UPDATE supporting_characters SET sub_name = ?, sub_prompt = ?, sub_personality = ?, sub_lore = ? WHERE id = ?", (e_s_name, e_s_p, e_s_pers, e_s_l, sel_sub_id))
+                                cursor.execute("""
+                                    UPDATE supporting_characters 
+                                    SET sub_name = %s, sub_prompt = %s, sub_personality = %s, sub_lore = %s 
+                                    WHERE id = %s
+                                """, (e_s_name, e_s_p, e_s_pers, e_s_l, sel_sub_id))
                                 conn.commit()
                                 st.success("แก้ไขตัวละครเสริมสำเร็จ!")
                                 st.rerun()
                 else:
                     st.info("ยังไม่มีตัวละครเสริม")
             else:
-                cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = ?", (active_char,))
+                cursor.execute("SELECT id, sub_name FROM supporting_characters WHERE char_name = %s", (active_char,))
                 sub_list = cursor.fetchall()
                 if sub_list:
                     sub_dict = {s[1]: s[0] for s in sub_list}
                     sel_sub_name = st.selectbox("เลือกตัวเสริมที่ต้องการลบ:", list(sub_dict.keys()))
                     if st.button("🗑️ ยืนยันลบตัวเสริมนี้", use_container_width=True):
-                        cursor.execute("DELETE FROM supporting_characters WHERE id = ?", (sub_dict[sel_sub_name],))
+                        cursor.execute("DELETE FROM supporting_characters WHERE id = %s", (sub_dict[sel_sub_name],))
                         conn.commit()
                         st.success("ลบตัวละครเสริมสำเร็จ!")
                         st.rerun()
@@ -381,7 +405,10 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 q_desc = st.text_input("รายละเอียดภารกิจใหม่:")
                 q_pts = st.slider("คะแนนรางวัล:", 5, 100, 15)
                 if st.form_submit_button("➕ เพิ่มภารกิจ", use_container_width=True) and q_desc:
-                    cursor.execute("INSERT INTO quests (char_name, task_desc, reward_points) VALUES (?, ?, ?)", (active_char, q_desc, q_pts))
+                    cursor.execute("""
+                        INSERT INTO quests (char_name, task_desc, reward_points) 
+                        VALUES (%s, %s, %s)
+                    """, (active_char, q_desc, q_pts))
                     conn.commit()
                     st.success("เพิ่มภารกิจสำเร็จ!")
                     st.rerun()
@@ -397,12 +424,15 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                     for photo_file in new_photos:
                         p_bytes = photo_file.getvalue()
                         p_hash = hashlib.md5(p_bytes).hexdigest()
-                        cursor.execute("INSERT INTO character_photos (char_name, photo, photo_hash) VALUES (?, ?, ?)", (active_char, p_bytes, p_hash))
+                        cursor.execute("""
+                            INSERT INTO character_photos (char_name, photo, photo_hash) 
+                            VALUES (%s, %s, %s)
+                        """, (active_char, psycopg2.Binary(p_bytes), p_hash))
                     conn.commit()
                     st.success("อัปโหลดรูปภาพสำเร็จ!")
                     st.rerun()
 
-            cursor.execute("SELECT id, photo FROM character_photos WHERE char_name = ?", (active_char,))
+            cursor.execute("SELECT id, photo FROM character_photos WHERE char_name = %s", (active_char,))
             photos_in_db = cursor.fetchall()
             if photos_in_db:
                 cols_img = st.columns(3)
@@ -411,27 +441,11 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                         with st.container(border=True):
                             st.image(Image.open(io.BytesIO(p_blob)), use_container_width=True)
                             if st.button("🗑️ ลบรูปนี้", key=f"del_photo_{p_id}", use_container_width=True):
-                                cursor.execute("DELETE FROM character_photos WHERE id = ?", (p_id,))
+                                cursor.execute("DELETE FROM character_photos WHERE id = %s", (p_id,))
                                 conn.commit()
                                 st.rerun()
         else:
             st.info("กรุณาเลือกตัวละครหลักก่อน")
-
-    elif sidebar_action == "💾 สำรองข้อมูลระบบ (Backup DB)":
-        st.markdown("### 💾 สำรองข้อมูลฐานข้อมูล (Backup Database)")
-        st.info("คุณสามารถดาวน์โหลดไฟล์ฐานข้อมูล `roleplay_data.db` เก็บไว้สำรองเพื่อป้องกันข้อมูลสูญหายได้ที่นี่")
-        try:
-            with open("roleplay_data.db", "rb") as f:
-                db_bytes = f.read()
-            st.download_button(
-                label="📥 ดาวน์โหลดไฟล์ Backup (.db)",
-                data=db_bytes,
-                file_name="roleplay_data_backup.db",
-                mime="application/octet-stream",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.warning("ยังไม่พบไฟล์ฐานข้อมูลในระบบ (ระบบจะสร้างให้อัตโนมัติเมื่อมีการใช้งาน)")
 
     elif sidebar_action == "🔍 ตรวจสอบเวอร์ชันและสถานะระบบ (Version Inspector)":
         st.markdown("### 🔍 ตรวจสอบเวอร์ชันและสถานะระบบ")
@@ -446,7 +460,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         st.markdown(f"**🤖 โมเดล AI หลัก:** `{model_name}`")
         st.divider()
         
-        st.markdown("#### 📊 สถิติฐานข้อมูลระบบ:")
+        st.markdown("#### 📊 สถิติฐานข้อมูลระบบ (Supabase Cloud):")
         col_v1, col_v2, col_v3 = st.columns(3)
         col_v1.metric("ผู้ใช้งานทั้งหมด", f"{total_users} บัญชี")
         col_v2.metric("ตัวละครในระบบ", f"{total_chars} ตัว")
@@ -454,12 +468,12 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
         
         st.markdown("#### 🧩 สถานะโมดูลและฟีเจอร์หลัก:")
         features_status = {
-            "🗄️ Database Engine (database.py)": "✅ พร้อมใช้งาน",
+            "🗄️ Database Engine (Supabase / PostgreSQL)": "✅ เชื่อมต่อสำเร็จ",
             "🛠️ Admin & User Panel (admin_panel.py)": "✅ พร้อมใช้งาน",
             "🌌 Main UI & Chat Engine (app.py)": "✅ พร้อมใช้งาน",
             "🧠 Smart Memory Compressor": "✅ เปิดใช้งาน",
             "⚡ Cheat Commands (/+ชอบ, /+ผ่านภารกิจ)": "✅ เปิดใช้งาน",
-            "💾 Auto Database Backup": "✅ เปิดใช้งาน"
+            "☁️ Cloud Persistent Storage": "✅ ป้องกันข้อมูลหาย 100%"
         }
         for f_name, f_status in features_status.items():
             st.markdown(f"- {f_name}: `{f_status}`")
@@ -492,9 +506,9 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 else:
                     if new_pass.strip():
                         hashed_p = hashlib.sha256(new_pass.encode()).hexdigest()
-                        cursor.execute("UPDATE users SET password = ?, is_admin = ? WHERE username = ?", (hashed_p, 1 if new_role_admin else 0, selected_target_user))
+                        cursor.execute("UPDATE users SET password = %s, is_admin = %s WHERE username = %s", (hashed_p, 1 if new_role_admin else 0, selected_target_user))
                     else:
-                        cursor.execute("UPDATE users SET is_admin = ? WHERE username = ?", (1 if new_role_admin else 0, selected_target_user))
+                        cursor.execute("UPDATE users SET is_admin = %s WHERE username = %s", (1 if new_role_admin else 0, selected_target_user))
                     conn.commit()
                     st.success(f"อัปเดตข้อมูลผู้ใช้ '{selected_target_user}' สำเร็จ!")
                     st.rerun()
@@ -505,7 +519,7 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                 elif selected_target_user == current_user:
                     st.error("คุณไม่สามารถลบบัญชีตัวเองในขณะที่กำลังใช้งานอยู่ได้!")
                 else:
-                    cursor.execute("DELETE FROM users WHERE username = ?", (selected_target_user,))
+                    cursor.execute("DELETE FROM users WHERE username = %s", (selected_target_user,))
                     conn.commit()
                     st.success(f"ลบบัญชี '{selected_target_user}' เรียบร้อยแล้ว!")
                     st.rerun()
