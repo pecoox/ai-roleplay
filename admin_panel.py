@@ -28,7 +28,8 @@ def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current
         "🗑️ ลบตัวละครหลัก",
         "👥 จัดการตัวละครเสริม",
         "🎯 จัดการภารกิจ (Quest Log)",
-        "🖼️ จัดการคลังรูปภาพ"
+        "🖼️ จัดการคลังรูปภาพ",
+        "💾 สำรองข้อมูลระบบ (Backup DB)"
     ]
     if is_admin:
         actions.append("👥 จัดการผู้ใช้งานระบบ")
@@ -348,6 +349,22 @@ def handle_admin_actions(sidebar_action, cursor, conn, all_chars, active_char, c
                                 st.rerun()
         else:
             st.info("กรุณาเลือกตัวละครหลักก่อน")
+
+    elif sidebar_action == "💾 สำรองข้อมูลระบบ (Backup DB)":
+        st.markdown("### 💾 สำรองข้อมูลฐานข้อมูล (Backup Database)")
+        st.info("คุณสามารถดาวน์โหลดไฟล์ฐานข้อมูล `roleplay_data.db` เก็บไว้สำรองเพื่อป้องกันข้อมูลสูญหายได้ที่นี่")
+        try:
+            with open("roleplay_data.db", "rb") as f:
+                db_bytes = f.read()
+            st.download_button(
+                label="📥 ดาวน์โหลดไฟล์ Backup (.db)",
+                data=db_bytes,
+                file_name="roleplay_data_backup.db",
+                mime="application/octet-stream",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.warning("ยังไม่พบไฟล์ฐานข้อมูลในระบบ (ระบบจะสร้างให้อัตโนมัติเมื่อมีการใช้งาน)")
 
     elif sidebar_action == "👥 จัดการผู้ใช้งานระบบ" and is_admin:
         st.markdown("### 👥 จัดการผู้ใช้งานระบบ")
