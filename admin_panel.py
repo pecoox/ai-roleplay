@@ -17,6 +17,72 @@ def run_with_timer(title_text, total_seconds=5):
     bar.empty()
 
 def render_admin_sidebar(cursor, conn, all_chars, active_char, is_admin, current_user):
+    
+    # 👤 กู้คืนส่วนตั้งค่าบทบาทตัวตนของผู้เล่น (User Persona) ไว้ใน Sidebar
+    cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
+    p_row = cursor.fetchone()
+    u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
+
+    with st.expander("⚙️ ตั้งค่าบทบาทตัวตนของคุณ"):
+        if active_char:
+            if st.button("✨ ให้ AI สร้างบทบาทให้เข้ากับเรื่องนี้", use_container_width=True):
+                run_with_timer("AI กำลังวิเคราะห์และสร้างบทบาทตัวผู้เล่น", 4)
+                try:
+                    cursor.execute("SELECT prompt, personality, lore FROM characters WHERE name = ?", (active_char,))
+                    c_info = cursor.fetchone()
+                    c_p, c_pers, c_l = c_info if c_info else ("", "", "")
+
+                    ai_prompt = (
+                        f"คุณคือผู้ช่วยสร้างบทบาทผู้เล่น (User Persona) สำหรับนำไปสวมบทบาทร่วมกับตัวละครหลักชื่อ '{active_char}'\n"
+                        f"ข้อมูลตัวละครหลัก: {c_p} | นิสัย: {c_pers} | เรื่องราว: {c_l}\n\n"
+                        f"กรุณาสร้างข้อมูลผู้เล่นในรูปแบบ JSON 1 บรรทัด (ห้ามมีข้อความอื่นปน) ดังนี้:\n"
+                        '{"user_name": "ชื่อตัวละครผู้เล่น", "user_persona": "ประวัติหรือความสัมพันธ์กับตัวละครหลักสั้นๆ", "pronoun_speak": "สรรพนามพูด เช่น ผม/ฉัน", "pronoun_desc": "สรรพนามบรรยาย เช่น เขา/เธอ", "call_speak": "สรรพนามเรียกตัวละคร เช่น คุณ/เธอ", "call_desc": "สรรพนามเรียกตอนบรรยาย เช่น ชายหนุ่ม"}'
+                    )
+                    from google import genai
+                    # ใช้ client จาก global หรือสร้างชั่วคราวผ่าน api_key
+                    api_key = st.secrets.get("GEMINI_API_KEY")
+                    if api_key:
+                        client = genai.Client(api_key=api_key)
+                        ai_res = client.models.generate_content(model="gemini-3.5-flash-lite", contents=ai_prompt)
+                        res_text = ai_res.text.strip()
+                        if "{" in res_text and "}" in res_text:
+                            json_str = res_text[res_text.find("{"):res_text.rfind("}")+1]
+                            p_data = json.loads(json_str)
+                            cursor.execute("""
+                                UPDATE users 
+                                SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
+                                WHERE username = ?
+                            """, (p_data.get("user_name", u_name), p_data.get("user_persona", u_persona), p_data.get("pronoun_speak", u_pspeak), p_data.get("pronoun_desc", u_pdesc), p_data.get("call_speak", u_cspeak), p_data.get("call_desc", u_cdesc), current_user))
+                            conn.commit()
+                            st.success("AI สร้างบทบาทให้เรียบร้อยแล้ว!")
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาด: {e}")
+
+        with st.form("user_persona_detailed_form"):
+            edit_uname = st.text_input("ชื่อของคุณ:", value=u_name)
+            edit_persona = st.text_area("บทบาทของคุณ:", value=u_persona, height=80)
+            
+            st.markdown("---")
+            col_p1, col_p2 = st.columns(2)
+            with col_p1: edit_pspeak = st.text_input("สรรพนามพูด:", value=u_pspeak)
+            with col_p2: edit_pdesc = st.text_input("สรรพนามบรรยาย:", value=u_pdesc)
+            
+            col_c1, col_c2 = st.columns(2)
+            with col_c1: edit_cspeak = st.text_input("ตัวละครเรียก (พูด):", value=u_cspeak)
+            with col_c2: edit_cdesc = st.text_input("ตัวละครเรียก (บรรยาย):", value=u_cdesc)
+
+            if st.form_submit_button("💾 บันทึกบทบาท", use_container_width=True):
+                cursor.execute("""
+                    UPDATE users 
+                    SET user_name = ?, user_persona = ?, pronoun_speak = ?, pronoun_desc = ?, call_speak = ?, call_desc = ? 
+                    WHERE username = ?
+                """, (edit_uname, edit_persona, edit_pspeak, edit_pdesc, edit_cspeak, edit_cdesc, current_user))
+                conn.commit()
+                st.success("บันทึกเรียบร้อย!")
+                st.rerun()
+
+    st.divider()
     title_text = "🛠️ จัดการระบบ (Admin Only)" if is_admin else "⚙️ จัดการตัวละครของฉัน"
     st.markdown(f"### {title_text}")
     
