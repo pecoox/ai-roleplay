@@ -4,6 +4,7 @@ from PIL import Image
 import io
 import random
 import json
+import psycopg2
 from database import init_db, hash_password, get_relationship_level
 from admin_panel import render_admin_sidebar, handle_admin_actions, run_with_timer
 
@@ -40,7 +41,7 @@ query_params = st.query_params
 if "logged_in" not in st.session_state:
     if "user" in query_params:
         u_check = query_params["user"]
-        cursor.execute("SELECT username, is_admin FROM users WHERE username = ?", (u_check,))
+        cursor.execute("SELECT username, is_admin FROM users WHERE username = %s", (u_check,))
         row = cursor.fetchone()
         if row:
             st.session_state.logged_in = True
@@ -66,7 +67,7 @@ if not st.session_state.logged_in:
             l_user = st.text_input("Username")
             l_pass = st.text_input("Password", type="password")
             if st.form_submit_button("เข้าสู่ระบบ", use_container_width=True):
-                cursor.execute("SELECT password, is_admin FROM users WHERE username = ?", (l_user,))
+                cursor.execute("SELECT password, is_admin FROM users WHERE username = %s", (l_user,))
                 row = cursor.fetchone()
                 if row and row[0] == hash_password(l_pass):
                     st.session_state.logged_in = True
@@ -83,13 +84,16 @@ if not st.session_state.logged_in:
             r_pass = st.text_input("ตั้ง Password", type="password")
             if st.form_submit_button("สมัครสมาชิก", use_container_width=True):
                 if r_user and r_pass:
-                    cursor.execute("SELECT username FROM users WHERE username = ?", (r_user,))
+                    cursor.execute("SELECT username FROM users WHERE username = %s", (r_user,))
                     if cursor.fetchone():
                         st.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว")
                     else:
                         cursor.execute("SELECT COUNT(*) FROM users")
                         assigned_admin = 1 if (r_user.lower() == "admin" or cursor.fetchone()[0] == 0) else 0
-                        cursor.execute("INSERT INTO users (username, password, is_admin, user_name) VALUES (?, ?, ?, ?)", (r_user, hash_password(r_pass), assigned_admin, r_user))
+                        cursor.execute("""
+                            INSERT INTO users (username, password, is_admin, user_name) 
+                            VALUES (%s, %s, %s, %s)
+                        """, (r_user, hash_password(r_pass), assigned_admin, r_user))
                         conn.commit()
                         st.success("สมัครสมาชิกสำเร็จ! กรุณาไปที่แท็บเข้าสู่ระบบ")
     st.stop()
@@ -98,7 +102,7 @@ current_user = st.session_state.username
 if current_user.lower() == "admin": st.session_state.is_admin = True
 is_current_admin = st.session_state.is_admin
 
-cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = ?", (current_user,))
+cursor.execute("SELECT user_name, user_persona, pronoun_speak, pronoun_desc, call_speak, call_desc FROM users WHERE username = %s", (current_user,))
 p_row = cursor.fetchone()
 u_name, u_persona, u_pspeak, u_pdesc, u_cspeak, u_cdesc = p_row if p_row else (current_user, "", "", "", "", "")
 
@@ -119,7 +123,7 @@ with st.sidebar:
     if is_current_admin:
         manageable_chars = all_chars
     else:
-        cursor.execute("SELECT name FROM characters WHERE creator = ?", (current_user,))
+        cursor.execute("SELECT name FROM characters WHERE creator = %s", (current_user,))
         manageable_chars = [row[0] for row in cursor.fetchall()]
 
     if manageable_chars and sidebar_action not in ["✨ สร้างตัวละครหลักด้วย AI (อัตโนมัติ)", "🌐 นำเข้าตัวละครจากข้อมูลเว็บ (Smart Parser)"]:
@@ -154,13 +158,13 @@ if not st.session_state.in_chat:
     else:
         cols = st.columns(3)
         for idx, c_name in enumerate(all_chars):
-            cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = ?", (c_name,))
+            cursor.execute("SELECT prompt, personality, lore, avatar FROM characters WHERE name = %s", (c_name,))
             c_data = cursor.fetchone()
             c_prompt, c_pers, c_lore, c_av = (c_data[0], c_data[1], c_data[2], c_data[3]) if c_data else ("", "", "", None)
             
             with cols[idx % 3]:
                 with st.container(border=True):
-                    if c_av: st.image(Image.open(io.BytesIO(c_av)), use_container_width=True)
+                    if c_av: st.image(Image.open(io.BytesIO(bytes(c_av))), use_container_width=True)
                     else: st.image("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", use_container_width=True)
                     st.markdown(f"### 🌟 {c_name}")
                     
@@ -172,7 +176,7 @@ if not st.session_state.in_chat:
                             st.markdown(f"**🧠 บุคลิก/นิสัย:**\n{c_pers}")
                             st.markdown(f"**📖 เรื่องราวพื้นหลัง:**\n{c_lore}")
                             
-                            cursor.execute("SELECT sub_name, sub_prompt, sub_lore FROM supporting_characters WHERE char_name = ?", (c_name,))
+                            cursor.execute("SELECT sub_name, sub_prompt, sub_lore FROM supporting_characters WHERE char_name = %s", (c_name,))
                             subs = cursor.fetchall()
                             if subs:
                                 st.markdown("---")
@@ -180,7 +184,7 @@ if not st.session_state.in_chat:
                                 for s_name, s_p, s_l in subs:
                                     st.markdown(f"- **{s_name}**: {s_p} *({s_l})*")
 
-                            cursor.execute("SELECT task_desc, reward_points FROM quests WHERE char_name = ?", (c_name,))
+                            cursor.execute("SELECT task_desc, reward_points FROM quests WHERE char_name = %s", (c_name,))
                             quests = cursor.fetchall()
                             if quests:
                                 st.markdown("---")
@@ -197,25 +201,29 @@ if not st.session_state.in_chat:
 
 # 💬 ห้องแชท
 if st.session_state.in_chat and st.session_state.current_char:
-    cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = ?", (st.session_state.current_char,))
+    cursor.execute("SELECT prompt, personality, lore, first_message, avatar FROM characters WHERE name = %s", (st.session_state.current_char,))
     char_data = cursor.fetchone()
     base_prompt = char_data[0] if char_data else ""
     char_personality = char_data[1] if char_data else ""
     char_lore = char_data[2] if char_data else ""
     char_first_msg_raw = char_data[3] if char_data else "[]"
-    char_avatar_img = Image.open(io.BytesIO(char_data[4])) if (char_data and char_data[4]) else None
+    char_avatar_img = Image.open(io.BytesIO(bytes(char_data[4]))) if (char_data and char_data[4]) else None
 
-    cursor.execute("SELECT sub_name, sub_prompt, sub_personality FROM supporting_characters WHERE char_name = ?", (st.session_state.current_char,))
+    cursor.execute("SELECT sub_name, sub_prompt, sub_personality FROM supporting_characters WHERE char_name = %s", (st.session_state.current_char,))
     supporting_text = ", ".join([f"{s[0]} ({s[1]}, นิสัย: {s[2]})" for s in cursor.fetchall()]) or "ไม่มี"
 
-    cursor.execute("INSERT OR IGNORE INTO character_status (username, char_name, affection_score, relationship_level) VALUES (?, ?, 0, 'คนแปลกหน้า')", (current_user, st.session_state.current_char))
+    cursor.execute("""
+        INSERT INTO character_status (username, char_name, affection_score, relationship_level) 
+        VALUES (%s, %s, 0, 'คนแปลกหน้า') 
+        ON CONFLICT (username, char_name) DO NOTHING
+    """, (current_user, st.session_state.current_char))
     conn.commit()
     
-    cursor.execute("SELECT affection_score, relationship_level FROM character_status WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
+    cursor.execute("SELECT affection_score, relationship_level FROM character_status WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
     status_row = cursor.fetchone()
     current_affection, current_rel_level = (status_row[0], status_row[1]) if status_row else (0, "คนแปลกหน้า")
 
-    cursor.execute("SELECT memory_summary FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
+    cursor.execute("SELECT memory_summary FROM novel_memories WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
     mem_row = cursor.fetchone()
     long_term_memory = mem_row[0] if mem_row else "ยังไม่มีเหตุการณ์สำคัญสะสม เริ่มต้นเรื่องราวใหม่"
 
@@ -252,14 +260,19 @@ if st.session_state.in_chat and st.session_state.current_char:
         except: pass
         return "*ปรายตามองคุณด้วยความเรียบเฉย* \"มีธุระอะไร?\""
 
-    cursor.execute("SELECT COUNT(*) FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
+    cursor.execute("SELECT COUNT(*) FROM messages WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
     if cursor.fetchone()[0] == 0:
         init_msg = get_random_first_msg(char_first_msg_raw)
-        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'assistant', ?)", (current_user, st.session_state.current_char, init_msg))
+        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (%s, %s, 'assistant', %s)", (current_user, st.session_state.current_char, init_msg))
         conn.commit()
 
-    cursor.execute("SELECT role, content, image_blob FROM (SELECT role, content, image_blob, id FROM messages WHERE username = ? AND char_name = ? ORDER BY id DESC LIMIT 15) ORDER BY id ASC", (current_user, st.session_state.current_char))
-    current_messages = [{"role": r[0], "content": r[1], "image": Image.open(io.BytesIO(r[2])) if r[2] else None} for r in cursor.fetchall()]
+    cursor.execute("""
+        SELECT role, content, image_blob FROM (
+            SELECT role, content, image_blob, id FROM messages WHERE username = %s AND char_name = %s ORDER BY id DESC LIMIT 15
+        ) sub ORDER BY id ASC
+    """, (current_user, st.session_state.current_char))
+    
+    current_messages = [{"role": r[0], "content": r[1], "image": Image.open(io.BytesIO(bytes(r[2]))) if r[2] else None} for r in cursor.fetchall()]
 
     col_av, col_title, col_reset = st.columns([1, 6, 2])
     with col_av:
@@ -269,13 +282,13 @@ if st.session_state.in_chat and st.session_state.current_char:
         st.markdown(f"### แชทกับ: `{st.session_state.current_char}` (ผู้ใช้: `{u_name}`)")
     with col_reset:
         if st.button("🔄 รีเซ็ตแชท", use_container_width=True):
-            cursor.execute("DELETE FROM messages WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
-            cursor.execute("UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
-            cursor.execute("DELETE FROM novel_memories WHERE username = ? AND char_name = ?", (current_user, st.session_state.current_char))
-            cursor.execute("DELETE FROM user_quests WHERE username = ? AND quest_id IN (SELECT id FROM quests WHERE char_name = ?)", (current_user, st.session_state.current_char))
+            cursor.execute("DELETE FROM messages WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
+            cursor.execute("UPDATE character_status SET affection_score = 0, relationship_level = 'คนแปลกหน้า' WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
+            cursor.execute("DELETE FROM novel_memories WHERE username = %s AND char_name = %s", (current_user, st.session_state.current_char))
+            cursor.execute("DELETE FROM user_quests WHERE username = %s AND quest_id IN (SELECT id FROM quests WHERE char_name = %s)", (current_user, st.session_state.current_char))
             
             new_m = get_random_first_msg(char_first_msg_raw)
-            cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'assistant', ?)", (current_user, st.session_state.current_char, new_m))
+            cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (%s, %s, 'assistant', %s)", (current_user, st.session_state.current_char, new_m))
             conn.commit()
             st.rerun()
 
@@ -293,11 +306,11 @@ if st.session_state.in_chat and st.session_state.current_char:
                 with col_pop:
                     with st.popover("🎯 ภารกิจ", use_container_width=True):
                         st.markdown("#### 🎯 รายการภารกิจ")
-                        cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = ?", (st.session_state.current_char,))
+                        cursor.execute("SELECT id, task_desc, reward_points FROM quests WHERE char_name = %s", (st.session_state.current_char,))
                         quests_in_db = cursor.fetchall()
                         if quests_in_db:
                             for q_id, desc, pts in quests_in_db:
-                                cursor.execute("SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?", (current_user, q_id))
+                                cursor.execute("SELECT is_completed FROM user_quests WHERE username = %s AND quest_id = %s", (current_user, q_id))
                                 uq = cursor.fetchone()
                                 is_comp = uq[0] if uq else 0
                                 if is_comp:
@@ -311,7 +324,7 @@ if st.session_state.in_chat and st.session_state.current_char:
                 if message["image"]: st.image(message["image"], width=280)
 
     if user_input := st.chat_input(f"ส่งข้อความหา {st.session_state.current_char}..."):
-        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (?, ?, 'user', ?)", (current_user, st.session_state.current_char, user_input))
+        cursor.execute("INSERT INTO messages (username, char_name, role, content) VALUES (%s, %s, 'user', %s)", (current_user, st.session_state.current_char, user_input))
         conn.commit()
 
         with st.chat_message("user", avatar="👤"):
@@ -334,7 +347,7 @@ if st.session_state.in_chat and st.session_state.current_char:
             is_cheat = True
             try:
                 completed_q_id = int(user_input.replace("/+ผ่านภารกิจ ", "").strip())
-                cursor.execute("SELECT task_desc, reward_points FROM quests WHERE id = ? AND char_name = ?", (completed_q_id, st.session_state.current_char))
+                cursor.execute("SELECT task_desc, reward_points FROM quests WHERE id = %s AND char_name = %s", (completed_q_id, st.session_state.current_char))
                 q_data = cursor.fetchone()
                 if q_data:
                     bot_response = f"*(สังเกตการณ์ระบบ: ทำภารกิจที่ #{completed_q_id} '{q_data[0]}' สำเร็จ! รับไป {q_data[1]} แต้ม)*"
@@ -395,33 +408,46 @@ if st.session_state.in_chat and st.session_state.current_char:
 
                 if memory_update:
                     updated_memory_vault = f"{long_term_memory} -> {memory_update}" if long_term_memory != "ยังไม่มีเหตุการณ์สำคัญสะสม เริ่มต้นเรื่องราวใหม่" else memory_update
-                    cursor.execute("INSERT OR REPLACE INTO novel_memories (username, char_name, memory_summary) VALUES (?, ?, ?)", (current_user, st.session_state.current_char, updated_memory_vault))
+                    cursor.execute("""
+                        INSERT INTO novel_memories (username, char_name, memory_summary) 
+                        VALUES (%s, %s, %s) 
+                        ON CONFLICT (username, char_name) DO UPDATE SET memory_summary = EXCLUDED.memory_summary
+                    """, (current_user, st.session_state.current_char, updated_memory_vault))
 
                 quest_bonus = 0
                 if completed_q_id:
-                    cursor.execute("SELECT is_completed FROM user_quests WHERE username = ? AND quest_id = ?", (current_user, completed_q_id))
+                    cursor.execute("SELECT is_completed FROM user_quests WHERE username = %s AND quest_id = %s", (current_user, completed_q_id))
                     uq_row = cursor.fetchone()
                     if not uq_row or uq_row[0] == 0:
-                        cursor.execute("SELECT reward_points FROM quests WHERE id = ?", (completed_q_id,))
+                        cursor.execute("SELECT reward_points FROM quests WHERE id = %s", (completed_q_id,))
                         q_info = cursor.fetchone()
                         if q_info:
                             quest_bonus = q_info[0]
-                            cursor.execute("INSERT OR REPLACE INTO user_quests (username, quest_id, is_completed) VALUES (?, ?, 1)", (current_user, completed_q_id))
+                            cursor.execute("""
+                                INSERT INTO user_quests (username, quest_id, is_completed) 
+                                VALUES (%s, %s, 1) 
+                                ON CONFLICT (username, quest_id) DO UPDATE SET is_completed = 1
+                            """, (current_user, completed_q_id))
 
                 updated_score = max(0, current_affection + score_change + quest_bonus)
                 new_lvl = get_relationship_level(updated_score)
 
-                cursor.execute("UPDATE character_status SET affection_score = ?, relationship_level = ? WHERE username = ? AND char_name = ?", (updated_score, new_lvl, current_user, st.session_state.current_char))
+                cursor.execute("""
+                    UPDATE character_status 
+                    SET affection_score = %s, relationship_level = %s 
+                    WHERE username = %s AND char_name = %s
+                """, (updated_score, new_lvl, current_user, st.session_state.current_char))
 
                 attached_photo_bytes = None
-                cursor.execute("SELECT photo FROM character_photos WHERE char_name = ?", (st.session_state.current_char,))
+                cursor.execute("SELECT photo FROM character_photos WHERE char_name = %s", (st.session_state.current_char,))
                 photos = cursor.fetchall()
                 if photos and random.random() < 0.30:
-                    attached_photo_bytes = random.choice(photos)[0]
+                    attached_photo_bytes = photos[random.randint(0, len(photos) - 1)][0]
 
-                if attached_photo_bytes:
-                    st.image(Image.open(io.BytesIO(attached_photo_bytes)), width=280)
-
-                cursor.execute("INSERT INTO messages (username, char_name, role, content, image_blob) VALUES (?, ?, 'assistant', ?, ?)", (current_user, st.session_state.current_char, bot_response, attached_photo_bytes))
+                cursor.execute("""
+                    INSERT INTO messages (username, char_name, role, content, image_blob) 
+                    VALUES (%s, %s, 'assistant', %s, %s)
+                """, (current_user, st.session_state.current_char, bot_response, psycopg2.Binary(attached_photo_bytes) if attached_photo_bytes else None))
+                
                 conn.commit()
                 st.rerun()
