@@ -3,18 +3,25 @@ import streamlit as st
 import hashlib
 
 def init_db():
-    url = st.secrets["SUPABASE_URL"]
-    
-    # ตรวจสอบและเติม sslmode=require เพื่อให้เชื่อมต่อกับ Supabase ได้อย่างเสถียร
-    if "?" in url:
-        conn_url = f"{url}&sslmode=require"
-    else:
-        conn_url = f"{url}?sslmode=require"
-        
-    conn = psycopg2.connect(conn_url)
+    # ดึงค่าจาก Streamlit Secrets แบบแยกส่วน ป้องกันปัญหาพาร์สลิงก์ผิดพลาด
+    # (หากใน Secrets ตั้งเป็น SUPABASE_URL ไว้ ให้แก้มาใช้รูปแบบแยกตัวแปรด้านล่างนี้แทนครับ)
+    db_host = st.secrets.get("DB_HOST", "db.yzulydpgqbzryanjlcoi.supabase.co")
+    db_port = st.secrets.get("DB_PORT", "6543") # ใช้พอร์ต 6543 (Pooler) เพื่อทะลวง IPv4 ของ Streamlit
+    db_name = st.secrets.get("DB_NAME", "postgres")
+    db_user = st.secrets.get("DB_USER", "postgres")
+    db_pass = st.secrets.get("DB_PASSWORD", "pp0952519677")
+
+    conn = psycopg2.connect(
+        host=db_host,
+        port=db_port,
+        dbname=db_name,
+        user=db_user,
+        password=db_pass,
+        sslmode="require"
+    )
     cursor = conn.cursor()
     
-    # สร้างตารางที่จำเป็นทั้งหมดเพื่อป้องกัน Error เรื่องตารางหาย
+    # สร้างตารางทั้งหมด
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -28,7 +35,6 @@ def init_db():
             call_desc TEXT
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS characters (
             name TEXT PRIMARY KEY,
@@ -40,7 +46,6 @@ def init_db():
             creator TEXT
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS supporting_characters (
             id SERIAL PRIMARY KEY,
@@ -51,7 +56,6 @@ def init_db():
             sub_lore TEXT
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_status (
             username TEXT,
@@ -61,7 +65,6 @@ def init_db():
             PRIMARY KEY (username, char_name)
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS novel_memories (
             username TEXT,
@@ -70,7 +73,6 @@ def init_db():
             PRIMARY KEY (username, char_name)
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quests (
             id SERIAL PRIMARY KEY,
@@ -79,7 +81,6 @@ def init_db():
             reward_points INTEGER
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_quests (
             username TEXT,
@@ -88,7 +89,6 @@ def init_db():
             PRIMARY KEY (username, quest_id)
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS character_photos (
             id SERIAL PRIMARY KEY,
@@ -97,7 +97,6 @@ def init_db():
             photo_hash TEXT
         );
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
